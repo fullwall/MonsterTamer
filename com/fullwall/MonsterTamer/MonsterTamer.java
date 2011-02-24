@@ -25,13 +25,11 @@ import java.util.Properties;
  */
 public class MonsterTamer extends JavaPlugin {
 
-
 	public final PlayerListen pl = new PlayerListen(this);
 	public final EntityListen el = new EntityListen(this);
 
-	private static final String codename = "Trainee";
+	private static final String codename = "Companions";
 	public static Logger log = Logger.getLogger("Minecraft");
-
 
 	// what monster the player is currently catching.
 	public static HashMap<String, String> playerCatching = new HashMap<String, String>();
@@ -41,13 +39,14 @@ public class MonsterTamer extends JavaPlugin {
 	public static HashMap<String, Double> monsterChances = new HashMap<String, Double>();
 	// id, bonus
 	public static HashMap<String, Double> catchItems = new HashMap<String, Double>();
+	public static HashMap<String, ArrayList<String>> friends = new HashMap<String, ArrayList<String>>();
 	public static Integer limit = 50;
 
 	public void onEnable() {
 
 		PluginManager pm = getServer().getPluginManager();
-		pm.registerEvent(Event.Type.ENTITY_DAMAGED, el,
-				Priority.Normal, this);
+		pm.registerEvent(Event.Type.ENTITY_DAMAGED, el, Priority.Normal, this);
+		pm.registerEvent(Event.Type.ENTITY_TARGET, el, Priority.Normal, this);
 		pm.registerEvent(Event.Type.PLAYER_DROP_ITEM, pl, Priority.Normal, this);
 		pm.registerEvent(Event.Type.PLAYER_COMMAND, pl, Priority.Normal, this);
 		PluginDescriptionFile pdfFile = this.getDescription();
@@ -159,13 +158,13 @@ public class MonsterTamer extends JavaPlugin {
 		String str = "";
 		int i3 = 0;
 
-		//get rid of whitespace
+		// get rid of whitespace
 		for (Map.Entry<String, ArrayList<String>> entry : playerMonsters
 				.entrySet()) {
 			Iterator<String> it = entry.getValue().iterator();
 			while (it.hasNext()) {
 				String itn = it.next();
-				if(itn.contains(" "))
+				if (itn.contains(" "))
 					itn.replace(" ", "");
 				if (itn.isEmpty())
 					it.remove();
@@ -173,24 +172,24 @@ public class MonsterTamer extends JavaPlugin {
 		}
 		String first;
 		String second;
-		//switch around errored monsters
+		// switch around errored monsters
 		for (Map.Entry<String, ArrayList<String>> entry : playerMonsters
 				.entrySet()) {
 			for (int i = 0; i < entry.getValue().size(); i++) {
 				first = entry.getValue().get(i);
-				if(i != entry.getValue().size() - 1) {
+				if (i != entry.getValue().size() - 1) {
 					second = entry.getValue().get(i + 1);
-				}
-				else
+				} else
 					break;
-				if(Character.isDigit(first.charAt(0)) && !Character.isDefined(second.charAt(0))) {
+				if (Character.isDigit(first.charAt(0))
+						&& !Character.isDefined(second.charAt(0))) {
 					entry.getValue().add(i, second);
-					entry.getValue().add(i+1, first);
+					entry.getValue().add(i + 1, first);
 				}
-				
+
 			}
 		}
-		
+
 		try {
 			for (Map.Entry<String, ArrayList<String>> entry : playerMonsters
 					.entrySet()) {
@@ -210,10 +209,8 @@ public class MonsterTamer extends JavaPlugin {
 			props.store(new FileOutputStream(
 					"plugins/MonsterTamer/MonsterTamer.users"), null);
 		} catch (FileNotFoundException e) {
-			// TODO Auto-generated catch block
 			log.info("[MonsterTamer]: Couldn't find MonsterTamer.users.");
 		} catch (IOException e) {
-			// TODO Auto-generated catch block
 			log.info("[MonsterTamer]: Couldn't write to MonsterTamer.users.");
 		}
 	}

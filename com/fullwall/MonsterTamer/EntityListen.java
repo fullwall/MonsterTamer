@@ -24,6 +24,7 @@ import org.bukkit.entity.Zombie;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityListener;
+import org.bukkit.event.entity.EntityTargetEvent;
 
 public class EntityListen extends EntityListener {
 	@SuppressWarnings("unused")
@@ -35,7 +36,7 @@ public class EntityListen extends EntityListener {
 	}
 
 	public void onEntityDamage(EntityDamageEvent event) {
-		if(!(event instanceof EntityDamageByEntityEvent)) {
+		if (!(event instanceof EntityDamageByEntityEvent)) {
 			return;
 		}
 		EntityDamageByEntityEvent e = (EntityDamageByEntityEvent) event;
@@ -108,6 +109,12 @@ public class EntityListen extends EntityListener {
 				return;
 			}
 			// get rid of the monster
+			if (MonsterTamer.friends.containsKey(player.getName())) {
+				ArrayList<String> friendsArray = MonsterTamer.friends
+						.get(player.getName());
+				if (friendsArray.contains(""+le.getEntityId()))
+					friendsArray.remove(""+le.getEntityId());
+			}
 			le.remove();
 
 			array.add(name);
@@ -118,6 +125,17 @@ public class EntityListen extends EntityListener {
 		}
 		MonsterTamer.playerCatching.remove(player.getName());
 		MonsterTamer.writeUsers();
+	}
+	public void onEntityTarget(EntityTargetEvent e) {
+		if (e.getTarget() instanceof Player) {
+			Player p = (Player) e.getTarget();
+			if (MonsterTamer.friends.containsKey(p.getName())) {
+				ArrayList<String> array = MonsterTamer.friends.get(p.getName());
+				if (array.contains(""+e.getEntity().getEntityId())) {
+					e.setCancelled(true);
+				}
+			}
+		}
 	}
 
 	public String checkMonsters(LivingEntity le) {

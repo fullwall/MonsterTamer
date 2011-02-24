@@ -43,5 +43,17 @@ public class Permission {
 		}
 		return player.isOp();
 	}
+	public static boolean friendly(Player player) {
+		if (permissionsEnabled) {
+			return permission(player, "monstertamer.player.befriend");
+		}
+		return player.isOp();
+	}
+	public static boolean target(Player player) {
+		if (permissionsEnabled) {
+			return permission(player, "monstertamer.player.target");
+		}
+		return player.isOp();
+	}
 
 }
