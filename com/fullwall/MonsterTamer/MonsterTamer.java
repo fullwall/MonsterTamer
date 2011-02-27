@@ -7,14 +7,26 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.logging.Logger;
+
+import org.bukkit.ChatColor;
+import org.bukkit.Location;
+import org.bukkit.Material;
+import org.bukkit.command.Command;
+import org.bukkit.command.CommandSender;
+import org.bukkit.entity.Creature;
+import org.bukkit.entity.Entity;
+import org.bukkit.entity.LivingEntity;
+import org.bukkit.entity.Player;
 import org.bukkit.event.Event.Priority;
 import org.bukkit.event.Event;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.PluginDescriptionFile;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -48,7 +60,6 @@ public class MonsterTamer extends JavaPlugin {
 		pm.registerEvent(Event.Type.ENTITY_DAMAGED, el, Priority.Normal, this);
 		pm.registerEvent(Event.Type.ENTITY_TARGET, el, Priority.Normal, this);
 		pm.registerEvent(Event.Type.PLAYER_DROP_ITEM, pl, Priority.Normal, this);
-		pm.registerEvent(Event.Type.PLAYER_COMMAND, pl, Priority.Normal, this);
 		PluginDescriptionFile pdfFile = this.getDescription();
 		Permission.initialize(getServer());
 		readSettings();
@@ -64,6 +75,204 @@ public class MonsterTamer extends JavaPlugin {
 		PluginDescriptionFile pdfFile = this.getDescription();
 		log.info("[" + pdfFile.getName() + "]: version ["
 				+ pdfFile.getVersion() + "] (" + codename + ") disabled");
+	}
+
+	public boolean onCommand(CommandSender sender, Command command,
+			String commandLabel, String[] args) {
+		String commandName = command.getName().toLowerCase();
+
+		if (!(sender instanceof Player)) {
+			sender.sendMessage("[MonsterTamer]: Must be ingame to use this command.");
+			return true;
+		}
+		Player p = (Player) sender;
+		commandName = "/" + commandName;
+		String parameters = "";
+		for (String i : args) {
+			parameters += " " + i;
+		}
+		String fullCommand = commandName + parameters;
+		String[] split = fullCommand.split(" ");
+		if (split.length == 2 && split[0].equals("/target")
+				&& split[1].equalsIgnoreCase("cancel")) {
+			cancelTarget(p, split);
+			return true;
+		} else if (split.length == 2 && split[0].equalsIgnoreCase("/release")) {
+			releaseMonster(p, split);
+			return true;
+		} else if (split.length == 1
+				&& (split[0].equalsIgnoreCase("/monsters") || split[0]
+						.equalsIgnoreCase("/ms"))) {
+			listMonsters(p, split);
+			return true;
+		} else if (split.length == 3 && (split[0].equalsIgnoreCase("/target"))
+				&& split[1].length() >= 1) {
+			targetMonster(p, split);
+			return true;
+		}
+		return false;
+	}
+
+	private void targetMonster(Player p, String[] split) {
+		List<Player> players = this.getServer().matchPlayer(split[1]);
+		Player target = null;
+		if (players.size() == 0) {
+			p.sendMessage("§cNo matching players were found.");
+			return;
+		} else if (players.size() != 1) {
+			p.sendMessage("§cMatched more than one player!  Be more specific!");
+			return;
+		} else {
+			target = players.get(0);
+		}
+		String name = split[2].toLowerCase();
+		if (PlayerListen.checkMonsters(name).isEmpty()) {
+			p.sendMessage(ChatColor.RED + "Incorrect monster name.");
+			return;
+		}
+		List<Entity> entityList = p.getWorld().getEntities();
+		Location loc = p.getLocation();
+		int count = 0;
+		LivingEntity le;
+		for (Entity entity : entityList) {
+			if (entity instanceof LivingEntity && entity instanceof Creature) {
+				le = (LivingEntity) entity;
+				if (PlayerListen.checkMonsters(le).equals(name)
+						&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
+								.getLocation().getX() >= loc.getX() - 10)
+								&& (entity.getLocation().getY() >= loc.getY() - 10 && entity
+										.getLocation().getY() <= loc.getY() + 10) && (entity
+								.getLocation().getZ() >= loc.getZ() - 10 && entity
+								.getLocation().getZ() <= loc.getZ() + 10))
+						&& MonsterTamer.friends.containsKey(p.getName())
+						&& MonsterTamer.friends.get(p).contains(
+								"" + entity.getEntityId())) {
+					Creature c = (Creature) entity;
+					c.setTarget(target);
+					count += 1;
+				}
+			}
+		}
+		if (count == 0)
+			p.sendMessage(ChatColor.GRAY
+					+ "You didn't have any friendly monsters nearby.");
+		else if (count == 1)
+			p.sendMessage(ChatColor.GREEN + "You sent " + count + " " + name
+					+ " after " + target.getName() + "!");
+		else
+			p.sendMessage(ChatColor.GREEN + "You sent " + count + " " + name
+					+ "s after " + target.getName() + "!");
+		return;
+	}
+
+	private void listMonsters(Player p, String[] split) {
+		if (!(Permission.checkMonsters(p))) {
+			p.sendMessage(ChatColor.RED
+					+ "You don't have permission to use that command.");
+			return;
+		}
+		// if we don't have any monsters
+		if (MonsterTamer.playerMonsters.get(p.getName()) == null
+				|| MonsterTamer.playerMonsters.get((p.getName())).size() == 0
+				|| MonsterTamer.playerMonsters.get((p.getName())).get(0)
+						.isEmpty()) {
+			p.sendMessage(ChatColor.GRAY + "You don't have any monsters yet!");
+			return;
+		} else {
+			ArrayList<String> array = MonsterTamer.playerMonsters.get(p
+					.getName());
+			p.sendMessage(ChatColor.GOLD + "A list of your current monsters.");
+			p.sendMessage(ChatColor.AQUA + "------------------------------");
+			int i2 = 0;
+			String monsterName = "";
+			String name = "";
+			for (int i = 0; i < array.size(); ++i) {
+				if (i2 == 0)
+					monsterName = array.get(i);
+				else if (i2 == 1) {
+					name = array.get(i);
+				}
+				if (!name.isEmpty() && !monsterName.isEmpty() && i2 == 1) {
+					Material mat = Material.matchMaterial(name);
+					if (mat != null) {
+						// String materialName =
+						// Material.matchMaterial(name).name().replace(
+						// Material.matchMaterial(name).name().substring(1),
+						// Material.matchMaterial(name).name().substring(1).toLowerCase());
+						p.sendMessage(ChatColor.GREEN + "A " + ChatColor.YELLOW
+								+ monsterName + ChatColor.GREEN
+								+ ", caught with a " + ChatColor.RED
+								+ mat.name() + ChatColor.GREEN + ".");
+					}
+				}
+				if (i2 + 1 > 1) {
+					i2 = 0;
+					monsterName = "";
+					name = "";
+				} else
+					i2 += 1;
+
+			}
+			p.sendMessage(ChatColor.AQUA + "------------------------------");
+			return;
+		}
+	}
+
+	private void releaseMonster(Player p, String[] split) {
+		if (!(Permission.release(p))) {
+			p.sendMessage(ChatColor.RED
+					+ "You don't have permission to use that command.");
+			return;
+		}
+		int id = Integer.parseInt(split[1]);
+		ArrayList<String> array = MonsterTamer.playerMonsters.get(p.getName());
+
+		if (!(id < array.size())) {
+			p.sendMessage(ChatColor.GRAY + "You don't have that many monsters!");
+			return;
+		}
+		int caughtWithID = Integer.parseInt(array.get(id - 1));
+		PlayerInventory pi = p.getInventory();
+		if (pi.contains(caughtWithID, 1)) {
+			pi.getItem(pi.first(caughtWithID)).setAmount(
+					pi.getItem(pi.first(caughtWithID)).getAmount() - 1);
+			PlayerListen.spawnFromLocation(p, caughtWithID);
+		} else {
+			p.sendMessage(ChatColor.GRAY
+					+ "You don't have any of the item you caught that monster with.");
+			return;
+		}
+	}
+
+	private void cancelTarget(Player p, String[] split) {
+		String name = split[2].toLowerCase();
+		if (PlayerListen.checkMonsters(name).isEmpty()) {
+			p.sendMessage(ChatColor.RED + "Incorrect monster name.");
+			return;
+		}
+		List<Entity> entityList = p.getWorld().getEntities();
+		Location loc = p.getLocation();
+		int count = 0;
+		LivingEntity le;
+		for (Entity entity : entityList) {
+			if (entity instanceof LivingEntity && entity instanceof Creature) {
+				le = (LivingEntity) entity;
+				if (PlayerListen.checkMonsters(le).equals(name)
+						&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
+								.getLocation().getX() >= loc.getX() - 10)
+								&& (entity.getLocation().getY() >= loc.getY() - 10 && entity
+										.getLocation().getY() <= loc.getY() + 10) && (entity
+								.getLocation().getZ() >= loc.getZ() - 10 && entity
+								.getLocation().getZ() <= loc.getZ() + 10))
+						&& MonsterTamer.friends.containsKey(p.getName())
+						&& MonsterTamer.friends.get(p.getName()).contains(
+								"" + entity.getEntityId())) {
+					Creature c = (Creature) entity;
+					c.setTarget(null);
+					count += 1;
+				}
+			}
+		}
 	}
 
 	public void readSettings() {

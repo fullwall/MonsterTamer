@@ -55,5 +55,11 @@ public class Permission {
 		}
 		return player.isOp();
 	}
+	public static boolean release(Player player) {
+		if (permissionsEnabled) {
+			return permission(player, "monstertamer.player.release");
+		}
+		return player.isOp();
+	}
 
 }

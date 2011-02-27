@@ -1,19 +1,16 @@
 package com.fullwall.MonsterTamer;
 
 import java.util.ArrayList;
-import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.Material;
 import org.bukkit.entity.Chicken;
 import org.bukkit.entity.Cow;
 import org.bukkit.entity.Creature;
 import org.bukkit.entity.CreatureType;
 import org.bukkit.entity.Creeper;
-import org.bukkit.entity.Entity;
 import org.bukkit.entity.Ghast;
 import org.bukkit.entity.Giant;
 import org.bukkit.entity.Item;
@@ -27,12 +24,12 @@ import org.bukkit.entity.Slime;
 import org.bukkit.entity.Spider;
 import org.bukkit.entity.Squid;
 import org.bukkit.entity.Zombie;
-import org.bukkit.event.player.PlayerChatEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerListener;
 
 public class PlayerListen extends PlayerListener {
 	private static MonsterTamer plugin;
+	private long delay;
 	public static Timer t = new Timer();
 
 	@SuppressWarnings("static-access")
@@ -40,139 +37,16 @@ public class PlayerListen extends PlayerListener {
 		this.plugin = plugin;
 	}
 
-	public void onPlayerCommand(PlayerChatEvent e) {
-		String[] split = e.getMessage().split(" ");
-		if (split.length == 3 && (split[0].equalsIgnoreCase("/target"))
-				&& split[1].length() >= 1) {
-			List<Player> players = plugin.getServer().matchPlayer(split[1]);
-			Player target = null;
-			if (players.size() == 0) {
-				e.getPlayer().sendMessage("§cNo matching players were found.");
-				e.setCancelled(true);
-				return;
-			} else if (players.size() != 1) {
-				e.getPlayer().sendMessage(
-						"§cMatched more than one player!  Be more specific!");
-				e.setCancelled(true);
-				return;
-			} else {
-				target = players.get(0);
-			}
-			String name = split[2].toLowerCase();
-			if (checkMonsters(name).isEmpty()) {
-				e.getPlayer().sendMessage(
-						ChatColor.RED + "Incorrect monster name.");
-				e.setCancelled(true);
-				return;
-			}
-			List<Entity> entityList = e.getPlayer().getWorld().getEntities();
-			Location loc = e.getPlayer().getLocation();
-			int count = 0;
-			LivingEntity le;
-			for (Entity entity : entityList) {
-				if (entity instanceof LivingEntity
-						&& entity instanceof Creature) {
-					le = (LivingEntity) entity;
-					if (checkMonsters(le).equals(name)
-							&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
-									.getLocation().getX() >= loc.getX() - 10)
-									&& (entity.getLocation().getY() >= loc
-											.getY() - 10 && entity
-											.getLocation().getY() <= loc.getY() + 10) && (entity
-									.getLocation().getZ() >= loc.getZ() - 10 && entity
-									.getLocation().getZ() <= loc.getZ() + 10))
-							&& MonsterTamer.friends.containsKey(e.getPlayer()
-									.getName())
-							&& MonsterTamer.friends
-									.get(e.getPlayer().getName()).contains(
-											"" + entity.getEntityId())) {
-						Creature c = (Creature) entity;
-						c.setTarget(target);
-						count += 1;
-					}
-				}
-			}
-			if (count == 0)
-				e.getPlayer()
-						.sendMessage(
-								ChatColor.GRAY
-										+ "You didn't have any friendly monsters nearby.");
-			else if (count == 1)
-				e.getPlayer().sendMessage(
-						ChatColor.GREEN + "You sent " + count + " " + name
-								+ " after " + target.getName() + "!");
-			else
-				e.getPlayer().sendMessage(
-						ChatColor.GREEN + "You sent " + count + " " + name
-								+ "s after " + target.getName() + "!");
-		} else if (split.length == 1
-				&& (split[0].equalsIgnoreCase("/monsters") || split[0]
-						.equalsIgnoreCase("/ms"))) {
-			if (!(Permission.checkMonsters(e.getPlayer()))) {
+	public void onPlayerDropItem(PlayerDropItemEvent e) {
+		if (Permission.check(e.getPlayer())) {
+			if (!(System.currentTimeMillis() >= (1000 + delay))) {
 				e.getPlayer()
 						.sendMessage(
 								ChatColor.RED
-										+ "You don't have permission to use that command.");
+										+ "You have to wait for at least a second before releasing another monster.");
 				return;
 			}
-			// if we don't have any monsters
-			if (MonsterTamer.playerMonsters.get(e.getPlayer().getName()) == null
-					|| MonsterTamer.playerMonsters.get(
-							(e.getPlayer().getName())).size() == 0
-					|| MonsterTamer.playerMonsters
-							.get((e.getPlayer().getName())).get(0).isEmpty()) {
-				e.getPlayer().sendMessage(
-						ChatColor.GRAY + "You don't have any monsters yet!");
-
-				return;
-			} else {
-				ArrayList<String> array = MonsterTamer.playerMonsters.get(e
-						.getPlayer().getName());
-				e.getPlayer().sendMessage(
-						ChatColor.GOLD + "A list of your current monsters.");
-				e.getPlayer().sendMessage(
-						ChatColor.AQUA + "------------------------------");
-				int i2 = 0;
-				String monsterName = "";
-				String name = "";
-				for (int i = 0; i < array.size(); ++i) {
-					if (i2 == 0)
-						monsterName = array.get(i);
-					else if (i2 == 1) {
-						name = array.get(i);
-					}
-					if (!name.isEmpty() && !monsterName.isEmpty() && i2 == 1) {
-						Material mat = Material.matchMaterial(name);
-						if (mat != null) {
-							// String materialName =
-							// Material.matchMaterial(name).name().replace(
-							// Material.matchMaterial(name).name().substring(1),
-							// Material.matchMaterial(name).name().substring(1).toLowerCase());
-							e.getPlayer().sendMessage(
-									ChatColor.GREEN + "A " + ChatColor.YELLOW
-											+ monsterName + ChatColor.GREEN
-											+ ", caught with a "
-											+ ChatColor.RED + mat.name()
-											+ ChatColor.GREEN + ".");
-						}
-					}
-					if (i2 + 1 > 1) {
-						i2 = 0;
-						monsterName = "";
-						name = "";
-					} else
-						i2 += 1;
-
-				}
-				e.getPlayer().sendMessage(
-						ChatColor.AQUA + "------------------------------");
-				e.setCancelled(true);
-			}
-		}
-	}
-
-	public void onPlayerDropItem(PlayerDropItemEvent e) {
-		if (Permission.check(e.getPlayer())) {
+			delay = System.currentTimeMillis();
 			Item id = e.getItemDrop();
 			if (checkMaps(id)) {
 				t.schedule(new RemindTask(e, id), 1250);
@@ -191,8 +65,8 @@ public class PlayerListen extends PlayerListener {
 			return;
 		}
 		String item = "" + id.getItemStack().getTypeId();
-		if (!isInArray(name, item, e.getPlayer()))
-			return;
+		// if (!isInArray(name, item, e.getPlayer()))
+		// return;
 		id.remove();
 		try {
 			CreatureType ct = CreatureType.fromName(name);
@@ -218,10 +92,41 @@ public class PlayerListen extends PlayerListener {
 
 		}
 		MonsterTamer.writeUsers();
-
 	}
 
-	public String checkMonsters(LivingEntity le) {
+	public static void spawnFromLocation(Player p, int ID) {
+		if (MonsterTamer.playerMonsters.get(p.getName()) == null
+				|| ((MonsterTamer.playerMonsters.get(p.getName()).size()) < 2))
+			return;
+		Location loc = p.getLocation();
+		String name = getName(p, ID);
+		if (name.isEmpty()) {
+			return;
+		}
+		String item = "" + ID;
+		if (!isInArray(name, item, p))
+			return;
+		try {
+			CreatureType ct = CreatureType.fromName(name);
+			Creature creature = p.getWorld().spawnCreature(loc, ct);
+			removeNameFromArray(name, item, p);
+			p.sendMessage(ChatColor.LIGHT_PURPLE + "You released your "
+					+ ChatColor.YELLOW + name + ChatColor.LIGHT_PURPLE
+					+ ". You have " + ChatColor.GREEN
+					+ (MonsterTamer.playerMonsters.get(p.getName()).size() / 2)
+					+ ChatColor.LIGHT_PURPLE + " monsters remaining.");
+			if (Permission.friendly(p)) {
+				addFriends(p, creature);
+			}
+
+		} catch (Exception e1) {
+			MonsterTamer.log.info("[MonsterTamer]: Error spawning monster.");
+
+		}
+		MonsterTamer.writeUsers();
+	}
+
+	public static String checkMonsters(LivingEntity le) {
 		String name = "";
 		if (le instanceof Chicken) {
 			name = "chicken";
@@ -253,7 +158,7 @@ public class PlayerListen extends PlayerListener {
 		return name;
 	}
 
-	public String checkMonsters(String name) {
+	public static String checkMonsters(String name) {
 		if (name.equals("chicken")) {
 			name = "chicken";
 		} else if (name.equals("cow")) {
@@ -306,6 +211,35 @@ public class PlayerListen extends PlayerListener {
 			} else if (i2 == 1) {
 				monsterName = array.get(i);
 				if (id.getItemStack().getTypeId() == Integer.parseInt(itemID)) {
+					break;
+				}
+			}
+			if (i2 == 2) {
+				i -= 1;
+				i2 = 0;
+				itemID = "";
+				monsterName = "";
+			} else
+				i2 += 1;
+
+		}
+		return monsterName;
+	}
+
+	public static String getName(Player p, int ID) {
+		ArrayList<String> array = MonsterTamer.playerMonsters.get(p.getName());
+		if (array == null || array.size() == 0)
+			return "";
+
+		int i2 = 0;
+		String monsterName = "";
+		String itemID = "";
+		for (int i = array.size() - 1; i >= 0; --i) {
+			if (i2 == 0) {
+				itemID = array.get(i);
+			} else if (i2 == 1) {
+				monsterName = array.get(i);
+				if (ID == Integer.parseInt(itemID)) {
 					break;
 				}
 			}
