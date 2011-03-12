@@ -1,6 +1,7 @@
 package com.fullwall.MonsterTamer;
 
 import java.util.ArrayList;
+
 import java.util.Timer;
 import java.util.TimerTask;
 
@@ -26,10 +27,12 @@ import org.bukkit.entity.Squid;
 import org.bukkit.entity.Zombie;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerListener;
+import org.bukkit.inventory.ItemStack;
 
 public class PlayerListen extends PlayerListener {
+	@SuppressWarnings("unused")
 	private static MonsterTamer plugin;
-	private long delay;
+	private long delay = 0;
 	public static Timer t = new Timer();
 
 	@SuppressWarnings("static-access")
@@ -37,22 +40,35 @@ public class PlayerListen extends PlayerListener {
 		this.plugin = plugin;
 	}
 
+	@Override
 	public void onPlayerDropItem(PlayerDropItemEvent e) {
 		if (Permission.check(e.getPlayer())) {
-			if (!(System.currentTimeMillis() >= (1000 + delay))) {
-				e.getPlayer()
-						.sendMessage(
-								ChatColor.RED
-										+ "You have to wait for at least a second before releasing another monster.");
-				return;
-			}
-			delay = System.currentTimeMillis();
 			Item id = e.getItemDrop();
 			if (checkMaps(id)) {
+				if (System.currentTimeMillis() <= (delay + 1300)) {
+					e.getPlayer()
+							.sendMessage(
+									ChatColor.RED
+											+ "You have to wait for at least a second before releasing another monster.");
+					return;
+				}
+				delay = System.currentTimeMillis();
 				t.schedule(new RemindTask(e, id), 1250);
 			}
 		}
 	}
+
+	/*
+	 * public void onPlayerAnimation(PlayerAnimationEvent e) { if
+	 * (e.getAnimationType() == PlayerAnimationType.ARM_SWING) { Location loc =
+	 * e.getPlayer().getTargetBlock(null, 4).getLocation(); for (Entity entity :
+	 * e.getPlayer().getWorld().getEntities()) { if (entity instanceof Item) {
+	 * Location l = entity.getLocation(); if ((loc.getX() <= l.getX() + 4 &&
+	 * loc.getX() >= l.getX() - 4) && (loc.getY() >= l.getY() - 4 && loc.getY()
+	 * <= l .getY() + 4) && (loc.getZ() >= l.getZ() - 4 && loc.getZ() <= l
+	 * .getZ() + 4) && !getName((Item) entity, e.getPlayer()).isEmpty()) {
+	 * MonsterTamer.log.info("!!!!"); } } } } }
+	 */
 
 	public static void spawnFromItemDrop(PlayerDropItemEvent e, Item id) {
 		if (MonsterTamer.playerMonsters.get(e.getPlayer().getName()) == null
@@ -65,9 +81,18 @@ public class PlayerListen extends PlayerListener {
 			return;
 		}
 		String item = "" + id.getItemStack().getTypeId();
-		// if (!isInArray(name, item, e.getPlayer()))
-		// return;
-		id.remove();
+		if (!isInArray(name, item, e.getPlayer()))
+			return;
+		int amount = id.getItemStack().getAmount();
+		amount -= 1;
+		if (amount == 0)
+			id.remove();
+		else {
+			ItemStack is = id.getItemStack();
+			is.setAmount(amount);
+			id.setItemStack(is);
+		}
+
 		try {
 			CreatureType ct = CreatureType.fromName(name);
 			Creature creature = id.getWorld().spawnCreature(loc, ct);
@@ -118,7 +143,6 @@ public class PlayerListen extends PlayerListener {
 			if (Permission.friendly(p)) {
 				addFriends(p, creature);
 			}
-
 		} catch (Exception e1) {
 			MonsterTamer.log.info("[MonsterTamer]: Error spawning monster.");
 
@@ -201,7 +225,6 @@ public class PlayerListen extends PlayerListener {
 		ArrayList<String> array = MonsterTamer.playerMonsters.get(p.getName());
 		if (array == null || array.size() == 0)
 			return "";
-
 		int i2 = 0;
 		String monsterName = "";
 		String itemID = "";
@@ -321,6 +344,7 @@ public class PlayerListen extends PlayerListener {
 			array = MonsterTamer.friends.get(p.getName());
 		array.add("" + c.getEntityId());
 		MonsterTamer.friends.put(p.getName(), array);
+		MonsterTamer.friendlies.add("" + c.getEntityId());
 		return;
 	}
 
@@ -334,6 +358,7 @@ public class PlayerListen extends PlayerListener {
 
 		}
 
+		@Override
 		public void run() {
 			PlayerListen.spawnFromItemDrop(event, itemdrop);
 		}

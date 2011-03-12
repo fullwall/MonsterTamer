@@ -22,7 +22,7 @@ public class Permission {
 		} else {
 			Logger log = Logger.getLogger("Minecraft");
 			log.log(Level.SEVERE,
-					"[MonsterTamer]: Nijikokuns' Permissions plugin isn't loaded, commands can't .");
+					"[MonsterTamer]: Nijikokuns' Permissions plugin isn't loaded. Commands are usable by all.");
 		}
 	}
 
@@ -30,7 +30,7 @@ public class Permission {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.check");
 		}
-		return player.isOp();
+		return true;
 	}
 
 	private static boolean permission(Player player, String string) {
@@ -41,25 +41,42 @@ public class Permission {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.catch");
 		}
-		return player.isOp();
+		return true;
 	}
+
 	public static boolean friendly(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.befriend");
 		}
-		return player.isOp();
+		return true;
 	}
+
 	public static boolean target(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.target");
 		}
-		return player.isOp();
+		return true;
 	}
+
 	public static boolean release(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.release");
 		}
-		return player.isOp();
+		return true;
+	}
+
+	public static boolean follow(Player player) {
+		if (permissionsEnabled) {
+			return permission(player, "monstertamer.player.follow");
+		}
+		return true;
+	}
+
+	public static boolean whistle(Player player) {
+		if (permissionsEnabled) {
+			return permission(player, "monstertamer.player.whistle");
+		}
+		return true;
 	}
 
 }

@@ -1,12 +1,14 @@
 package com.fullwall.MonsterTamer;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Animals;
 import org.bukkit.entity.Chicken;
 import org.bukkit.entity.Cow;
+import org.bukkit.entity.Creature;
 import org.bukkit.entity.Creeper;
 import org.bukkit.entity.Ghast;
 import org.bukkit.entity.Giant;
@@ -25,24 +27,50 @@ import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
 import org.bukkit.event.entity.EntityListener;
 import org.bukkit.event.entity.EntityTargetEvent;
+import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
 
 public class EntityListen extends EntityListener {
 	@SuppressWarnings("unused")
 	private final MonsterTamer plugin;
+	private long delay;
 	public static Random random = new Random();
 
 	public EntityListen(final MonsterTamer plugin) {
 		this.plugin = plugin;
 	}
 
+	@Override
 	public void onEntityDamage(EntityDamageEvent event) {
+		if (event.getCause() == DamageCause.FIRE_TICK) {
+			if (MonsterTamer.friendlies.contains(""
+					+ event.getEntity().getEntityId())) {
+				event.getEntity().setFireTicks(0);
+				event.setCancelled(true);
+				return;
+			}
+		}
 		if (!(event instanceof EntityDamageByEntityEvent)) {
 			return;
 		}
 		EntityDamageByEntityEvent e = (EntityDamageByEntityEvent) event;
+		if (e.getDamager() instanceof LivingEntity
+				&& e.getEntity() instanceof Player
+				&& MonsterTamer.friends.get(((Player) e.getEntity()).getName()) != null) {
+			ArrayList<String> array = MonsterTamer.friends.get(((Player) e
+					.getEntity()).getName());
+			List<LivingEntity> livingEntities = e.getEntity().getWorld()
+					.getLivingEntities();
+			for (LivingEntity i : livingEntities) {
+				if (i instanceof Creature
+						&& array.contains("" + i.getEntityId())) {
+					Creature c = (Creature) i;
+					c.setTarget((LivingEntity) e.getDamager());
+				}
+			}
+			return;
+		}
 		if (!(e.getDamager() instanceof Player))
 			return;
-
 		if (!(e.getEntity() instanceof LivingEntity)
 				&& (!(e.getEntity() instanceof Animals) || !(e.getEntity() instanceof Monster)))
 			return;
@@ -67,14 +95,20 @@ public class EntityListen extends EntityListener {
 				return;
 		MonsterTamer.playerCatching.put(player.getName(), name);
 		double chance = MonsterTamer.monsterChances.get(checkMonsters(le));
-		if (chance < 3)
-			chance = 3;
-		double bonus = MonsterTamer.catchItems.get(""
-				+ player.getItemInHand().getTypeId());
+		if (chance < 3.0D)
+			chance = 3.0D;
+		double bonus = (MonsterTamer.catchItems.get(""
+				+ player.getItemInHand().getTypeId()).doubleValue());
 		double ran = random.nextDouble();
 		ran *= 100;
 		// magic pokemon chance to catch.
 		chance = ((((3 * 20 - 2 * le.getHealth()) * chance * bonus) / (3 * 20) / 256) * 100);
+		// friendlies get a 100% catch rate.
+		ArrayList<String> temparray = MonsterTamer.friends
+				.get(player.getName());
+		if (temparray != null
+				&& temparray.contains(e.getEntity().getEntityId()))
+			chance = 9000;
 		if (ran > chance) {
 			if (ran - chance <= 10)
 				player.sendMessage(ChatColor.LIGHT_PURPLE + "No! The " + name
@@ -93,15 +127,18 @@ public class EntityListen extends EntityListener {
 			MonsterTamer.playerCatching.remove(player.getName());
 			return;
 		} else {
-
+			if (System.currentTimeMillis() < 1000L + this.delay) {
+				player.sendMessage(ChatColor.DARK_AQUA
+						+ "You were moving too fast and stumbled.");
+				MonsterTamer.playerCatching.remove(player.getName());
+				return;
+			}
 			ArrayList<String> array = new ArrayList<String>();
-			if (MonsterTamer.playerMonsters.get(player.getName()) == null) {
-				@SuppressWarnings("unused")
-				int i = 0;
-			} else {
+			if (MonsterTamer.playerMonsters.get(player.getName()) != null) {
 				array = MonsterTamer.playerMonsters.get(player.getName());
 			}
-			if (array.size() % 2 > MonsterTamer.limit) {
+			this.delay = System.currentTimeMillis();
+			if ((array.size() / 2) > MonsterTamer.limit) {
 				player.sendMessage(ChatColor.RED
 						+ "You don't have enough room for more monsters! The limit is "
 						+ MonsterTamer.limit + ".");
@@ -112,9 +149,12 @@ public class EntityListen extends EntityListener {
 			if (MonsterTamer.friends.containsKey(player.getName())) {
 				ArrayList<String> friendsArray = MonsterTamer.friends
 						.get(player.getName());
-				if (friendsArray.contains(""+le.getEntityId()))
-					friendsArray.remove(""+le.getEntityId());
+				if (friendsArray.contains("" + le.getEntityId()))
+					friendsArray.remove("" + le.getEntityId());
 			}
+			// stop other monsters overwriting the friendly ID
+			if (MonsterTamer.friendlies.contains("" + le.getEntityId()))
+				MonsterTamer.friendlies.remove("" + le.getEntityId());
 			le.remove();
 
 			array.add(name);
@@ -126,13 +166,22 @@ public class EntityListen extends EntityListener {
 		MonsterTamer.playerCatching.remove(player.getName());
 		MonsterTamer.writeUsers();
 	}
+
+	@Override
 	public void onEntityTarget(EntityTargetEvent e) {
-		if (e.getTarget() instanceof Player) {
+		if ((e.getTarget() instanceof Player)) {
 			Player p = (Player) e.getTarget();
-			if (MonsterTamer.friends.containsKey(p.getName())) {
-				ArrayList<String> array = MonsterTamer.friends.get(p.getName());
-				if (array.contains(""+e.getEntity().getEntityId())) {
+			if (MonsterTamer.friendlies.contains(""
+					+ e.getEntity().getEntityId())) {
+				String name = MonsterTamer.targets.get(e.getEntity()
+						.getEntityId());
+				if (name == null) {
 					e.setCancelled(true);
+					return;
+				}
+				if (!(name.equals(p.getName()))) {
+					e.setCancelled(true);
+					return;
 				}
 			}
 		}
