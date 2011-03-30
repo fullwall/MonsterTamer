@@ -1,13 +1,13 @@
 package com.fullwall.MonsterTamer;
 
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.bukkit.Location;
 import org.bukkit.entity.Creature;
 import org.bukkit.entity.CreatureType;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.world.ChunkLoadEvent;
@@ -16,7 +16,7 @@ import org.bukkit.event.world.WorldListener;
 
 public class WorldListen extends WorldListener {
 	private static MonsterTamer plugin;
-	private HashMap<Location, ArrayList<String>> toRespawn = new HashMap<Location, ArrayList<String>>();
+	private ConcurrentHashMap<Location, ArrayList<String>> toRespawn = new ConcurrentHashMap<Location, ArrayList<String>>();
 
 	@SuppressWarnings("static-access")
 	public WorldListen(final MonsterTamer plugin) {
@@ -25,49 +25,50 @@ public class WorldListen extends WorldListener {
 
 	public void onChunkUnloaded(ChunkUnloadEvent e) {
 		if (MonsterTamer.stopDespawning == true) {
-			List<LivingEntity> ab = e.getWorld().getLivingEntities();
-			for (LivingEntity le : ab) {
-				if (!(le instanceof Player)
-						&& le instanceof Creature
+			for (Entity entity : e.getChunk().getEntities()) {
+				if (!(entity instanceof Player)
+						&& entity instanceof LivingEntity
+						&& entity instanceof Creature
 						&& MonsterTamer.friendlies.contains(""
-								+ le.getEntityId())
-						&& le.getWorld().getChunkAt(le.getLocation()).getX() == e
-								.getChunk().getX()) {
-					MonsterTamer.log.info("Unloaded.");
+								+ entity.getEntityId())) {
+					LivingEntity living = (LivingEntity) entity;
 					String playerName = "";
-					Location loc = le.getLocation();
+					Location loc = living.getLocation();
 					ArrayList<String> toPut = new ArrayList<String>();
-					toPut.add(plugin.el.checkMonsters(le));
+					toPut.add(plugin.entityListener.checkMonsters(living));
 					for (Entry<String, ArrayList<String>> i : MonsterTamer.friends
 							.entrySet()) {
-						if (i.getValue().contains("" + le.getEntityId())) {
+						if (i.getValue().contains("" + living.getEntityId())) {
 							playerName = i.getKey();
-							i.getValue()
-									.remove(i.getValue().indexOf(
-											"" + le.getEntityId()));
+							i.getValue().remove(
+									i.getValue().indexOf(
+											"" + living.getEntityId()));
 							break;
 						}
 					}
 					toPut.add(playerName);
 
-					if (MonsterTamer.targets.containsKey("" + le.getEntityId())) {
+					if (MonsterTamer.targets.containsKey(""
+							+ living.getEntityId())) {
 						toPut.add(MonsterTamer.targets.get(""
-								+ le.getEntityId()));
-						MonsterTamer.targets.remove("" + le.getEntityId());
+								+ living.getEntityId()));
+						MonsterTamer.targets.remove("" + living.getEntityId());
 					} else
 						toPut.add("");
 
+					String ownerName = "";
 					for (Entry<String, ArrayList<Integer>> i : MonsterTamer.followers
 							.entrySet()) {
-						if (i.getValue().contains("" + le.getEntityId())) {
-							playerName = i.getKey();
+						if (i.getValue().contains("" + living.getEntityId())) {
+							ownerName = i.getKey();
 							i.getValue().remove(
-									i.getValue().indexOf(le.getEntityId()));
+									i.getValue().indexOf(living.getEntityId()));
 							break;
 						}
 					}
+					toPut.add(ownerName);
 					MonsterTamer.friendlies.remove(MonsterTamer.friendlies
-							.indexOf("" + le.getEntityId()));
+							.indexOf("" + living.getEntityId()));
 					toRespawn.put(loc, toPut);
 				}
 			}
@@ -76,13 +77,12 @@ public class WorldListen extends WorldListener {
 	}
 
 	public void onChunkLoaded(ChunkLoadEvent e) {
-		if (MonsterTamer.stopDespawning == true) {
+		if (MonsterTamer.stopDespawning == true && toRespawn.size() > 0) {
 			for (Entry<Location, ArrayList<String>> entry : toRespawn
 					.entrySet()) {
 				if (e.getChunk().getWorld().getChunkAt(entry.getKey())
 						.equals(e.getChunk())) {
-					MonsterTamer.log.info("Triggered");
-					Creature monster = entry
+					Creature monster = (Creature) entry
 							.getKey()
 							.getWorld()
 							.spawnCreature(

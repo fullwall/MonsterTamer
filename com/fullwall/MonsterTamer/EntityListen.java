@@ -41,11 +41,12 @@ public class EntityListen extends EntityListener {
 
 	@Override
 	public void onEntityDamage(EntityDamageEvent event) {
-		if (event.getCause() == DamageCause.FIRE_TICK) {
+		if (event.getCause() == DamageCause.FIRE_TICK
+				|| event.getCause() == DamageCause.FIRE) {
 			if (MonsterTamer.friendlies.contains(""
 					+ event.getEntity().getEntityId())) {
-				event.getEntity().setFireTicks(0);
 				event.setCancelled(true);
+				event.getEntity().setFireTicks(0);
 				return;
 			}
 		}
@@ -175,7 +176,7 @@ public class EntityListen extends EntityListener {
 					+ e.getEntity().getEntityId())) {
 				String name = MonsterTamer.targets.get(e.getEntity()
 						.getEntityId());
-				if (name == null) {
+				if (name == null || name.isEmpty()) {
 					e.setCancelled(true);
 					return;
 				}

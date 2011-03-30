@@ -43,10 +43,12 @@ import java.util.Properties;
 public class MonsterTamer extends JavaPlugin {
 
 	public final PlayerListen pl = new PlayerListen(this);
-	public final EntityListen el = new EntityListen(this);
+	public final EntityListen entityListener = new EntityListen(this);
 	public final WorldListen wl = new WorldListen(this);
 
 	private static final String codename = "Companions";
+	public static final String noPermissionsMessage = ChatColor.RED
+			+ "You don't have permission to use that command!";
 	public static Logger log = Logger.getLogger("Minecraft");
 
 	// what monster the player is currently catching.
@@ -63,30 +65,38 @@ public class MonsterTamer extends JavaPlugin {
 	public static ConcurrentHashMap<String, String> targets = new ConcurrentHashMap<String, String>();
 	// player name, entities
 	public static ConcurrentHashMap<String, ArrayList<Integer>> followers = new ConcurrentHashMap<String, ArrayList<Integer>>();
+	// player name, entities
+	public static ConcurrentHashMap<String, ArrayList<Integer>> waiters = new ConcurrentHashMap<String, ArrayList<Integer>>();
 	// list of friendly entity ids
 	public static ArrayList<String> friendlies = new ArrayList<String>();
 	// limit of monsters
 	public static Integer limit = 50;
 	public static boolean stopDespawning = true;
+	public static boolean consumeItems = true;
 	public static FollowersHandler handler;
+
+	public void onLoad() {
+
+	}
 
 	public void onEnable() {
 
 		PluginManager pm = getServer().getPluginManager();
-		pm.registerEvent(Event.Type.ENTITY_DAMAGED, el, Priority.Normal, this);
-		pm.registerEvent(Event.Type.ENTITY_TARGET, el, Priority.Normal, this);
+		pm.registerEvent(Event.Type.ENTITY_DAMAGE, entityListener,
+				Priority.Normal, this);
+		pm.registerEvent(Event.Type.ENTITY_TARGET, entityListener,
+				Priority.Normal, this);
 		pm.registerEvent(Event.Type.PLAYER_ANIMATION, pl, Priority.Normal, this);
 		pm.registerEvent(Event.Type.PLAYER_DROP_ITEM, pl, Priority.Normal, this);
-		pm.registerEvent(Event.Type.CHUNK_UNLOADED, wl, Priority.Normal, this);
-		pm.registerEvent(Event.Type.CHUNK_LOADED, wl, Priority.Normal, this);
+		// pm.registerEvent(Event.Type.CHUNK_UNLOADED, wl, Priority.Normal,
+		// this);
+		// pm.registerEvent(Event.Type.CHUNK_LOADED, wl, Priority.Normal, this);
 		PluginDescriptionFile pdfFile = this.getDescription();
 		Permission.initialize(getServer());
 		readSettings();
 		handler = new FollowersHandler(this);
 		getServer().getScheduler().scheduleSyncRepeatingTask(this, handler, 5,
 				1);
-		// EXAMPLE: Custom code, here we just output some info so we can check
-		// all is well.
 		log.info("[" + pdfFile.getName() + "]: version ["
 				+ pdfFile.getVersion() + "] (" + codename + ") loaded");
 
@@ -120,7 +130,10 @@ public class MonsterTamer extends JavaPlugin {
 			cancelTarget(p, split);
 			return true;
 		} else if (split.length == 2 && split[0].equalsIgnoreCase("/release")) {
-			releaseMonster(p, split);
+			if (Permission.release(p)) {
+				releaseMonster(p, split);
+			} else
+				p.sendMessage(noPermissionsMessage);
 			return true;
 		} else if (split.length == 1
 				&& (split[0].equalsIgnoreCase("/monsters") || split[0]
@@ -133,16 +146,28 @@ public class MonsterTamer extends JavaPlugin {
 			if (Permission.target(p)) {
 				targetMonster(p, split);
 			} else
-				p.sendMessage(ChatColor.RED
-						+ "You don't have permission to use this command");
+				p.sendMessage(noPermissionsMessage);
 			return true;
 		} else if (split.length == 1 && (split[0].equalsIgnoreCase("/whistle"))) {
 			if (Permission.whistle(p))
 				whistle(p);
 			else
-				p.sendMessage(ChatColor.RED
-						+ "You don't have permission to use that command.");
+				p.sendMessage(noPermissionsMessage);
 
+			return true;
+		} else if (split.length == 3 && split[0].equalsIgnoreCase("/wait")
+				&& split[1].equalsIgnoreCase("cancel")) {
+			if (Permission.wait(p))
+				removeWaiters(p, args);
+			else
+				p.sendMessage(noPermissionsMessage);
+			return true;
+		} else if (split.length == 3 && split[0].equalsIgnoreCase("/follow")
+				&& split[1].equalsIgnoreCase("cancel")) {
+			if (Permission.follow(p))
+				removeFollowers(p, args);
+			else
+				p.sendMessage(noPermissionsMessage);
 			return true;
 		} else if (split.length == 2 && split[0].equalsIgnoreCase("/follow")) {
 			if (Permission.follow(p)) {
@@ -153,26 +178,53 @@ public class MonsterTamer extends JavaPlugin {
 					p.sendMessage(ChatColor.RED
 							+ "Couldn't find any monsters of that type.");
 			} else
-				p.sendMessage(ChatColor.RED
-						+ "You don't have permission to use that command.");
+				p.sendMessage(noPermissionsMessage);
 			return true;
-		} else if (split.length == 3 && split[0].equalsIgnoreCase("/follow")
-				&& split[1].equalsIgnoreCase("cancel")) {
-			if (Permission.follow(p))
-				removeFollowers(p, args);
-			else
-				p.sendMessage(ChatColor.RED
-						+ "You don't have permission to use that command.");
-			return true;
-		}
-		if ((split[0].equalsIgnoreCase("/follow") && !Permission.follow(p))
-				|| (split[0].equalsIgnoreCase("/release") && !Permission
-						.release(p))) {
-			p.sendMessage(ChatColor.RED
-					+ "You don't have permission to use that command.");
+		} else if (split.length == 2 && split[0].equalsIgnoreCase("/wait")) {
+			if (Permission.wait(p)) {
+				if (addWaiters(p, args))
+					p.sendMessage(ChatColor.GREEN
+							+ "Your "
+							+ args[0]
+							+ "s stay where they are, looking a little forlorn.");
+				else
+					p.sendMessage(ChatColor.RED
+							+ "Couldn't find any monsters of that type.");
+			} else
+				p.sendMessage(noPermissionsMessage);
 			return true;
 		}
 		return false;
+	}
+
+	private void removeWaiters(Player p, String[] args) {
+		int count = 0;
+		for (Entry<String, ArrayList<Integer>> i : MonsterTamer.waiters
+				.entrySet()) {
+			if (!i.getKey().equalsIgnoreCase(p.getName()))
+				continue;
+			for (LivingEntity e : p.getWorld().getLivingEntities()) {
+				if (e instanceof Creature
+						&& i.getValue().contains(e.getEntityId())
+						&& PlayerListen.checkMonsters(e).equals(args[1])
+						&& friends.containsKey(p.getName())
+						&& friends.get(p.getName()).contains(
+								"" + e.getEntityId())) {
+					int index = i.getValue().indexOf(e.getEntityId());
+					if (index != -1) {
+						i.getValue().remove(index);
+						count += 1;
+					}
+				}
+			}
+			if (count == 0) {
+				p.sendMessage(ChatColor.GRAY
+						+ "You don't have any waiters yet!");
+			} else
+				p.sendMessage(ChatColor.GREEN + "Your " + args[1]
+						+ "s stopped waiting.");
+			return;
+		}
 	}
 
 	private void removeFollowers(Player p, String[] args) {
@@ -207,37 +259,38 @@ public class MonsterTamer extends JavaPlugin {
 
 	private boolean addFollowers(Player p, String[] args) {
 		boolean found = false;
-		if (args[0].equals("cancel")) {
-			for (LivingEntity le : p.getWorld().getLivingEntities()) {
-				if (le instanceof Creature
-						&& PlayerListen.checkMonsters(le).equals(args[0])
-						&& friends.containsKey(p.getName())
-						&& friends.get(p.getName()).contains(
-								"" + le.getEntityId())) {
-					ArrayList<Integer> array = followers.get(p.getName());
-					if (array == null)
-						array = new ArrayList<Integer>();
-					if (array.contains(le.getEntityId())) {
-						array.remove(array.indexOf(le.getEntityId()));
-						followers.put(p.getName(), array);
-						found = true;
-					}
-				}
+		for (LivingEntity le : p.getWorld().getLivingEntities()) {
+			if (le instanceof Creature
+					&& (args[0].equals("all") || PlayerListen.checkMonsters(le)
+							.equals(args[0]))
+					&& friends.containsKey(p.getName())
+					&& friends.get(p.getName()).contains("" + le.getEntityId())) {
+				ArrayList<Integer> array = followers.get(p.getName());
+				if (array == null)
+					array = new ArrayList<Integer>();
+				array.add(le.getEntityId());
+				followers.put(p.getName(), array);
+				found = true;
 			}
-		} else {
-			for (LivingEntity le : p.getWorld().getLivingEntities()) {
-				if (le instanceof Creature
-						&& PlayerListen.checkMonsters(le).equals(args[0])
-						&& friends.containsKey(p.getName())
-						&& friends.get(p.getName()).contains(
-								"" + le.getEntityId())) {
-					ArrayList<Integer> array = followers.get(p.getName());
-					if (array == null)
-						array = new ArrayList<Integer>();
-					array.add(le.getEntityId());
-					followers.put(p.getName(), array);
-					found = true;
-				}
+
+		}
+		return found;
+	}
+
+	private boolean addWaiters(Player p, String[] args) {
+		boolean found = false;
+		for (LivingEntity le : p.getWorld().getLivingEntities()) {
+			if (le instanceof Creature
+					&& (args[0].equals("all") || PlayerListen.checkMonsters(le)
+							.equals(args[0]))
+					&& friends.containsKey(p.getName())
+					&& friends.get(p.getName()).contains("" + le.getEntityId())) {
+				ArrayList<Integer> array = waiters.get(p.getName());
+				if (array == null)
+					array = new ArrayList<Integer>();
+				array.add(le.getEntityId());
+				waiters.put(p.getName(), array);
+				found = true;
 			}
 		}
 		return found;
@@ -288,7 +341,9 @@ public class MonsterTamer extends JavaPlugin {
 		for (LivingEntity entity : entityList) {
 			if (entity instanceof Creature) {
 				le = entity;
-				if (PlayerListen.checkMonsters(le).equals(name)
+				if ((name.equals("all") || PlayerListen.checkMonsters(le)
+						.equals(name))
+						&& entity.getEntityId() != p.getEntityId()
 						&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
 								.getLocation().getX() >= loc.getX() - 10)
 								&& (entity.getLocation().getY() >= loc.getY() - 10 && entity
@@ -320,7 +375,6 @@ public class MonsterTamer extends JavaPlugin {
 	private void monsterTarget(String[] split, Player p) {
 		List<LivingEntity> entityList = p.getWorld().getLivingEntities();
 		Location loc = p.getLocation();
-		// int count = 0;
 		LivingEntity le;
 		if (friends.get(p.getName()) == null) {
 			p.sendMessage(ChatColor.GRAY
@@ -328,10 +382,12 @@ public class MonsterTamer extends JavaPlugin {
 			return;
 		}
 		int count = 0;
+		// target fullwall all
 		for (LivingEntity entity : entityList) {
 			if (entity instanceof Creature) {
 				le = entity;
-				if (PlayerListen.checkMonsters(le).equals(split[1])
+				if ((split[2].equals("all") || PlayerListen.checkMonsters(le)
+						.equals(split[2]))
 						&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
 								.getLocation().getX() >= loc.getX() - 10)
 								&& (entity.getLocation().getY() >= loc.getY() - 10 && entity
@@ -344,8 +400,9 @@ public class MonsterTamer extends JavaPlugin {
 					Creature c = (Creature) entity;
 					for (LivingEntity e : entityList) {
 						if (e instanceof Creature
-								&& PlayerListen.checkMonsters(e).equals(
-										split[2])
+								&& entity.getEntityId() != p.getEntityId()
+								&& (split[1].equals("all") || PlayerListen
+										.checkMonsters(e).equals(split[1]))
 								&& ((e.getLocation().getX() <= loc.getX() + 20 && e
 										.getLocation().getX() >= loc.getX() - 20)
 										&& (e.getLocation().getY() >= loc
@@ -363,12 +420,11 @@ public class MonsterTamer extends JavaPlugin {
 						}
 					}
 					break;
-					// count += 1;
 				}
 			}
 		}
 		if (count != 1)
-			p.sendMessage("§cNo matching players or monster types were found.");
+			p.sendMessage("§cNo matching monster types were found.");
 		else
 			p.sendMessage(ChatColor.GREEN + "Targeted a " + split[1]);
 		return;
@@ -387,7 +443,7 @@ public class MonsterTamer extends JavaPlugin {
 						.isEmpty()) {
 			p.sendMessage(ChatColor.GRAY + "You don't have any monsters yet!");
 			return;
-		} else {
+		} else if (split.length == 1) {
 			ArrayList<String> array = MonsterTamer.playerMonsters.get(p
 					.getName());
 			p.sendMessage(ChatColor.GOLD + "A list of your current monsters.");
@@ -404,10 +460,6 @@ public class MonsterTamer extends JavaPlugin {
 				if (!name.isEmpty() && !monsterName.isEmpty() && i2 == 1) {
 					Material mat = Material.matchMaterial(name);
 					if (mat != null) {
-						// String materialName =
-						// Material.matchMaterial(name).name().replace(
-						// Material.matchMaterial(name).name().substring(1),
-						// Material.matchMaterial(name).name().substring(1).toLowerCase());
 						p.sendMessage(ChatColor.GREEN + "A " + ChatColor.YELLOW
 								+ monsterName + ChatColor.GREEN
 								+ ", caught with a " + ChatColor.RED
@@ -422,6 +474,29 @@ public class MonsterTamer extends JavaPlugin {
 					i2 += 1;
 
 			}
+			p.sendMessage(ChatColor.AQUA + "------------------------------");
+			return;
+		} else if (split.length == 2 && split[1].equals("help")) {
+			p.sendMessage(ChatColor.GOLD + "MonsterTamer (by fullwall) Help.");
+			p.sendMessage(ChatColor.AQUA + "------------------------------");
+			p.sendMessage(ChatColor.GREEN
+					+ "/monsters|ms - displays a list of your current monsters.");
+			p.sendMessage(ChatColor.GREEN
+					+ "/target [playername] [mobname]|all - makes all friendly monsters near you attack that player.");
+			p.sendMessage(ChatColor.GREEN
+					+ "/target cancel [mobname]|all - cancels the targets of all friendly monsters near you.");
+			p.sendMessage(ChatColor.GREEN
+					+ "/release [slot ID|monster type]- release the monster in the specified slot or type. NOTE: /release 0 is the FIRST monster on the list.");
+			p.sendMessage(ChatColor.GREEN
+					+ "/whistle - commands all of your monsters to come to you.");
+			p.sendMessage(ChatColor.GREEN
+					+ "/follow [mobtype]|all - commands all friendly monsters of that type to follow you.");
+			p.sendMessage(ChatColor.GREEN
+					+ "/follow cancel [mobtype]|all - stops all friendly monsters of that type from following you.");
+			p.sendMessage(ChatColor.GREEN
+					+ "/wait [mobtype]|all - commands all friendly monsters of that type to wait at their position.");
+			p.sendMessage(ChatColor.GREEN
+					+ "/wait cancel [mobtype]|all - stops all friendly monsters of that type from waiting where they are.");
 			p.sendMessage(ChatColor.AQUA + "------------------------------");
 			return;
 		}
@@ -456,10 +531,11 @@ public class MonsterTamer extends JavaPlugin {
 					caughtWithID = Integer.parseInt(array.get(index));
 				PlayerInventory pi = p.getInventory();
 				if (pi.contains(caughtWithID, 1)) {
-					pi.getItem(pi.first(caughtWithID))
-							.setAmount(
-									(pi.getItem(pi.first(caughtWithID))
-											.getAmount() - 1));
+					if (consumeItems)
+						pi.getItem(pi.first(caughtWithID))
+								.setAmount(
+										(pi.getItem(pi.first(caughtWithID))
+												.getAmount() - 1));
 					PlayerListen.spawnFromLocation(p, caughtWithID);
 				} else {
 					p.sendMessage(ChatColor.GRAY
@@ -489,8 +565,9 @@ public class MonsterTamer extends JavaPlugin {
 			caughtWithID = Integer.parseInt(array.get(id));
 		PlayerInventory pi = p.getInventory();
 		if (pi.contains(caughtWithID, 1)) {
-			pi.getItem(pi.first(caughtWithID)).setAmount(
-					(pi.getItem(pi.first(caughtWithID)).getAmount() - 1));
+			if (consumeItems)
+				pi.getItem(pi.first(caughtWithID)).setAmount(
+						(pi.getItem(pi.first(caughtWithID)).getAmount() - 1));
 			PlayerListen.spawnFromLocation(p, caughtWithID);
 		} else {
 			p.sendMessage(ChatColor.GRAY
@@ -511,7 +588,8 @@ public class MonsterTamer extends JavaPlugin {
 		for (LivingEntity entity : p.getWorld().getLivingEntities()) {
 			if (entity instanceof Creature) {
 				le = (LivingEntity) entity;
-				if (PlayerListen.checkMonsters(le).equals(name)
+				if ((name.equals("all") || PlayerListen.checkMonsters(le)
+						.equals(name))
 						&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
 								.getLocation().getX() >= loc.getX() - 10)
 								&& (entity.getLocation().getY() >= loc.getY() - 10 && entity
@@ -543,6 +621,9 @@ public class MonsterTamer extends JavaPlugin {
 		if (props.containsKey("stop-despawning"))
 			stopDespawning = Boolean.parseBoolean(props
 					.getProperty("stop-despawning"));
+		if (props.containsKey("consume-items"))
+			consumeItems = Boolean.parseBoolean(props
+					.getProperty("consume-items"));
 		if (props.containsKey("items")) {
 			String[] split = props.getProperty("items").split(";");
 			for (String i : split) {

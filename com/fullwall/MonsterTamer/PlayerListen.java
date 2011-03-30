@@ -83,19 +83,20 @@ public class PlayerListen extends PlayerListener {
 		String item = "" + id.getItemStack().getTypeId();
 		if (!isInArray(name, item, e.getPlayer()))
 			return;
-		int amount = id.getItemStack().getAmount();
-		amount -= 1;
-		if (amount == 0)
-			id.remove();
-		else {
-			ItemStack is = id.getItemStack();
-			is.setAmount(amount);
-			id.setItemStack(is);
+		if (MonsterTamer.consumeItems) {
+			int amount = id.getItemStack().getAmount();
+			amount -= 1;
+			if (amount == 0)
+				id.remove();
+			else {
+				ItemStack is = id.getItemStack();
+				is.setAmount(amount);
+				id.setItemStack(is);
+			}
 		}
-
 		try {
 			CreatureType ct = CreatureType.fromName(name);
-			Creature creature = id.getWorld().spawnCreature(loc, ct);
+			Creature creature = (Creature) id.getWorld().spawnCreature(loc, ct);
 			removeNameFromArray(name, item, e.getPlayer());
 			e.getPlayer().sendMessage(
 					ChatColor.LIGHT_PURPLE
@@ -133,7 +134,7 @@ public class PlayerListen extends PlayerListener {
 			return;
 		try {
 			CreatureType ct = CreatureType.fromName(name);
-			Creature creature = p.getWorld().spawnCreature(loc, ct);
+			Creature creature = (Creature) p.getWorld().spawnCreature(loc, ct);
 			removeNameFromArray(name, item, p);
 			p.sendMessage(ChatColor.LIGHT_PURPLE + "You released your "
 					+ ChatColor.YELLOW + name + ChatColor.LIGHT_PURPLE

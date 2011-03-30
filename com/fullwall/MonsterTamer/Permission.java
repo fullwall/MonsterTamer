@@ -79,4 +79,11 @@ public class Permission {
 		return true;
 	}
 
+	public static boolean wait(Player player) {
+		if (permissionsEnabled) {
+			return permission(player, "monstertamer.player.wait");
+		}
+		return true;
+	}
+
 }

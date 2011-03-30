@@ -1,6 +1,7 @@
 package com.fullwall.MonsterTamer;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Map.Entry;
 
 import net.minecraft.server.EntityCreature;
@@ -33,7 +34,8 @@ public class FollowersHandler implements Runnable {
 				continue;
 			}
 			Player p = plugin.getServer().getPlayer(i.getKey());
-			for (LivingEntity le : p.getWorld().getLivingEntities()) {
+			List<LivingEntity> list = p.getWorld().getLivingEntities();
+			for (LivingEntity le : list) {
 				if (le instanceof Creature
 						&& i.getValue().contains(le.getEntityId())) {
 					Location loc = p.getLocation();
@@ -49,6 +51,23 @@ public class FollowersHandler implements Runnable {
 				}
 			}
 		}
+		for (Entry<String, ArrayList<Integer>> i : MonsterTamer.waiters
+				.entrySet()) {
+			if (plugin.getServer().getPlayer(i.getKey()) == null) {
+				MonsterTamer.waiters.remove(i.getKey());
+				continue;
+			}
+			Player p = plugin.getServer().getPlayer(i.getKey());
+			for (LivingEntity le : p.getWorld().getLivingEntities()) {
+				if (le instanceof Creature
+						&& i.getValue().contains(le.getEntityId())) {
+					Location loc = le.getLocation();
+					PathPoint[] pp = { new PathPoint(loc.getBlockX(),
+							loc.getBlockY(), loc.getBlockZ()) };
+					((EntityCreature) (((CraftEntity) le).getHandle())).a = new PathEntity(
+							pp);
+				}
+			}
+		}
 	}
-
 }

@@ -104,16 +104,16 @@ public abstract class DirectionUtils {
 		return CompassDirection.NO_DIRECTION;
 	}
 
-	public static Block getBlockBehind(World w,
-			CompassDirection efacingDir, int x, int y, int z) {
+	public static Block getBlockBehind(World w, CompassDirection efacingDir,
+			int x, int y, int z) {
 		if (efacingDir == CompassDirection.NORTH)
-			return w.getBlockAt(x + 1, y, z);
+			return w.getBlockAt(x + 2, y, z);
 		if (efacingDir == CompassDirection.EAST)
-			return w.getBlockAt(x, y, z + 1);
+			return w.getBlockAt(x, y, z + 2);
 		if (efacingDir == CompassDirection.SOUTH)
-			return w.getBlockAt(x - 1, y, z);
+			return w.getBlockAt(x - 2, y, z);
 		if (efacingDir == CompassDirection.WEST)
-			return w.getBlockAt(x, y, z - 1);
+			return w.getBlockAt(x, y, z - 2);
 		return null;
 	}
 }
