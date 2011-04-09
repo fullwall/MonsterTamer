@@ -86,4 +86,11 @@ public class Permission {
 		return true;
 	}
 
+	public static boolean select(Player player) {
+		if (permissionsEnabled) {
+			return permission(player, "monstertamer.player.select");
+		}
+		return true;
+	}
+
 }

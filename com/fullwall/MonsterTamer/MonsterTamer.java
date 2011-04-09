@@ -10,16 +10,11 @@ import java.util.Map.Entry;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 
-import net.minecraft.server.EntityCreature;
-import net.minecraft.server.PathEntity;
-import net.minecraft.server.PathPoint;
-
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.craftbukkit.entity.CraftEntity;
 import org.bukkit.entity.Creature;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
@@ -46,7 +41,7 @@ public class MonsterTamer extends JavaPlugin {
 	public final EntityListen entityListener = new EntityListen(this);
 	public final WorldListen wl = new WorldListen(this);
 
-	private static final String codename = "Companions";
+	private static final String codename = "Commander";
 	public static final String noPermissionsMessage = ChatColor.RED
 			+ "You don't have permission to use that command!";
 	public static Logger log = Logger.getLogger("Minecraft");
@@ -67,18 +62,25 @@ public class MonsterTamer extends JavaPlugin {
 	public static ConcurrentHashMap<String, ArrayList<Integer>> followers = new ConcurrentHashMap<String, ArrayList<Integer>>();
 	// player name, entities
 	public static ConcurrentHashMap<String, ArrayList<Integer>> waiters = new ConcurrentHashMap<String, ArrayList<Integer>>();
+	// player name, entity IDs
+	public static ConcurrentHashMap<String, ArrayList<Integer>> selectedMonsters = new ConcurrentHashMap<String, ArrayList<Integer>>();
+	// entity ID, location to move to
+	public static ConcurrentHashMap<Integer, Location> locationMovers = new ConcurrentHashMap<Integer, Location>();
 	// list of friendly entity ids
 	public static ArrayList<String> friendlies = new ArrayList<String>();
 	// limit of monsters
-	public static Integer limit = 50;
+	public static int limit = 50;
+	public static int selectTool = 280;
 	public static boolean stopDespawning = true;
 	public static boolean consumeItems = true;
-	public static FollowersHandler handler;
+	public static TickTask handler;
 
+	@Override
 	public void onLoad() {
 
 	}
 
+	@Override
 	public void onEnable() {
 
 		PluginManager pm = getServer().getPluginManager();
@@ -88,13 +90,14 @@ public class MonsterTamer extends JavaPlugin {
 				Priority.Normal, this);
 		pm.registerEvent(Event.Type.PLAYER_ANIMATION, pl, Priority.Normal, this);
 		pm.registerEvent(Event.Type.PLAYER_DROP_ITEM, pl, Priority.Normal, this);
+		pm.registerEvent(Event.Type.PLAYER_INTERACT, pl, Priority.Normal, this);
 		// pm.registerEvent(Event.Type.CHUNK_UNLOADED, wl, Priority.Normal,
 		// this);
 		// pm.registerEvent(Event.Type.CHUNK_LOADED, wl, Priority.Normal, this);
 		PluginDescriptionFile pdfFile = this.getDescription();
 		Permission.initialize(getServer());
 		readSettings();
-		handler = new FollowersHandler(this);
+		handler = new TickTask(this);
 		getServer().getScheduler().scheduleSyncRepeatingTask(this, handler, 5,
 				1);
 		log.info("[" + pdfFile.getName() + "]: version ["
@@ -109,6 +112,7 @@ public class MonsterTamer extends JavaPlugin {
 				+ pdfFile.getVersion() + "] (" + codename + ") disabled");
 	}
 
+	@Override
 	public boolean onCommand(CommandSender sender, Command command,
 			String commandLabel, String[] args) {
 		String commandName = command.getName().toLowerCase();
@@ -169,14 +173,21 @@ public class MonsterTamer extends JavaPlugin {
 			else
 				p.sendMessage(noPermissionsMessage);
 			return true;
-		} else if (split.length == 2 && split[0].equalsIgnoreCase("/follow")) {
+		} else if (split[0].equalsIgnoreCase("/follow")) {
 			if (Permission.follow(p)) {
-				if (addFollowers(p, args))
-					p.sendMessage(ChatColor.GREEN + "PHWEET! Your " + args[0]
-							+ "s start following you.");
-				else
-					p.sendMessage(ChatColor.RED
-							+ "Couldn't find any monsters of that type.");
+				if (split.length == 2) {
+					if (addFollowers(p, args))
+						p.sendMessage(ChatColor.GREEN + "PHWEET! Your "
+								+ ChatColor.YELLOW + args[0] + ChatColor.GREEN
+								+ "s start following you.");
+					else
+						p.sendMessage(ChatColor.RED
+								+ "Couldn't find any monsters of that type.");
+				} else if (split.length == 1) {
+					addFollowersFromSelected(p, args);
+					p.sendMessage(ChatColor.GREEN
+							+ "PHWEET! Your selected monsters start following you.");
+				}
 			} else
 				p.sendMessage(noPermissionsMessage);
 			return true;
@@ -193,8 +204,85 @@ public class MonsterTamer extends JavaPlugin {
 			} else
 				p.sendMessage(noPermissionsMessage);
 			return true;
+		} else if (split.length == 2 && split[0].equalsIgnoreCase("/select")) {
+			if (Permission.select(p)) {
+				selectMonsters(p, args, true);
+			} else
+				p.sendMessage(noPermissionsMessage);
+			return true;
+		} else if (split.length == 2 && split[0].equalsIgnoreCase("/deselect")) {
+			if (Permission.select(p)) {
+				selectMonsters(p, args, false);
+			} else
+				p.sendMessage(noPermissionsMessage);
+			return true;
 		}
 		return false;
+	}
+
+	private void selectMonsters(Player player, String[] args, boolean remove) {
+		int count = 0;
+		ArrayList<Integer> selected = new ArrayList<Integer>();
+		if (selectedMonsters.get(player.getName()) != null)
+			selected = selectedMonsters.get(player.getName());
+		for (LivingEntity livingEntity : player.getWorld().getLivingEntities()) {
+			if (livingEntity instanceof Creature
+					&& (args[0].equals("all") || EntityListen.checkMonsters(
+							livingEntity).equals(args[0]))
+					&& friends.containsKey(player.getName())
+					&& friends.get(player.getName()).contains(
+							"" + livingEntity.getEntityId())) {
+				if (remove) {
+					selected.add(livingEntity.getEntityId());
+					addFollower(player, livingEntity, false);
+				} else if (selected.indexOf(livingEntity.getEntityId()) != -1) {
+					selected.remove(selected.indexOf(livingEntity.getEntityId()));
+					addFollower(player, livingEntity, true);
+				}
+				count += 1;
+			}
+		}
+		if (count > 0) {
+			selectedMonsters.put(player.getName(), selected);
+			if (args[0].equals("all"))
+				player.sendMessage(ChatColor.GREEN
+						+ "Selected all of your monsters (" + count + ").");
+			else
+				player.sendMessage(ChatColor.GREEN + "Selected " + count
+						+ " monster(s) of type " + args[0] + ".");
+		} else {
+			player.sendMessage(ChatColor.RED
+					+ "You don't have any monsters of that type to select!");
+		}
+
+	}
+
+	public static void addFollower(Player player, Integer id, boolean remove) {
+		ArrayList<Integer> array = MonsterTamer.followers.get(player.getName());
+		if (array == null)
+			array = new ArrayList<Integer>();
+		if (!remove) {
+			if (array.indexOf(id) == -1)
+				array.add(id);
+		} else {
+			if (array.indexOf(id) != -1)
+				array.remove(array.indexOf(id));
+		}
+		MonsterTamer.followers.put(player.getName(), array);
+	}
+
+	public static void addFollower(Player p, LivingEntity e, boolean remove) {
+		ArrayList<Integer> array = MonsterTamer.followers.get(p.getName());
+		if (array == null)
+			array = new ArrayList<Integer>();
+		if (!remove) {
+			if (array.indexOf(e.getEntityId()) == -1)
+				array.add(e.getEntityId());
+		} else {
+			if (array.indexOf(e.getEntityId()) != -1)
+				array.remove(array.indexOf(e.getEntityId()));
+		}
+		MonsterTamer.followers.put(p.getName(), array);
 	}
 
 	private void removeWaiters(Player p, String[] args) {
@@ -206,7 +294,7 @@ public class MonsterTamer extends JavaPlugin {
 			for (LivingEntity e : p.getWorld().getLivingEntities()) {
 				if (e instanceof Creature
 						&& i.getValue().contains(e.getEntityId())
-						&& PlayerListen.checkMonsters(e).equals(args[1])
+						&& EntityListen.checkMonsters(e).equals(args[1])
 						&& friends.containsKey(p.getName())
 						&& friends.get(p.getName()).contains(
 								"" + e.getEntityId())) {
@@ -236,7 +324,7 @@ public class MonsterTamer extends JavaPlugin {
 			for (LivingEntity e : p.getWorld().getLivingEntities()) {
 				if (e instanceof Creature
 						&& i.getValue().contains(e.getEntityId())
-						&& PlayerListen.checkMonsters(e).equals(args[1])
+						&& EntityListen.checkMonsters(e).equals(args[1])
 						&& friends.containsKey(p.getName())
 						&& friends.get(p.getName()).contains(
 								"" + e.getEntityId())) {
@@ -261,7 +349,7 @@ public class MonsterTamer extends JavaPlugin {
 		boolean found = false;
 		for (LivingEntity le : p.getWorld().getLivingEntities()) {
 			if (le instanceof Creature
-					&& (args[0].equals("all") || PlayerListen.checkMonsters(le)
+					&& (args[0].equals("all") || EntityListen.checkMonsters(le)
 							.equals(args[0]))
 					&& friends.containsKey(p.getName())
 					&& friends.get(p.getName()).contains("" + le.getEntityId())) {
@@ -277,11 +365,23 @@ public class MonsterTamer extends JavaPlugin {
 		return found;
 	}
 
+	private void addFollowersFromSelected(Player p, String[] args) {
+		if (selectedMonsters.get(p.getName()) != null
+				&& selectedMonsters.get(p.getName()).size() > 0)
+			for (LivingEntity entity : p.getWorld().getLivingEntities()) {
+				for (Integer ID : selectedMonsters.get(p.getName())) {
+					if (entity.getEntityId() == ID) {
+						addFollower(p, ID, false);
+					}
+				}
+			}
+	}
+
 	private boolean addWaiters(Player p, String[] args) {
 		boolean found = false;
 		for (LivingEntity le : p.getWorld().getLivingEntities()) {
 			if (le instanceof Creature
-					&& (args[0].equals("all") || PlayerListen.checkMonsters(le)
+					&& (args[0].equals("all") || EntityListen.checkMonsters(le)
 							.equals(args[0]))
 					&& friends.containsKey(p.getName())
 					&& friends.get(p.getName()).contains("" + le.getEntityId())) {
@@ -297,13 +397,9 @@ public class MonsterTamer extends JavaPlugin {
 	}
 
 	private void whistle(Player p) {
-		Location loc = p.getLocation();
-		PathPoint[] pp = { new PathPoint(loc.getBlockX(), loc.getBlockY(),
-				loc.getBlockZ()) };
 		for (LivingEntity le : p.getWorld().getLivingEntities()) {
 			if (friendlies.contains("" + le.getEntityId())) {
-				((EntityCreature) (((CraftEntity) le).getHandle())).a = new PathEntity(
-						pp);
+				locationMovers.put(le.getEntityId(), p.getLocation());
 			}
 		}
 	}
@@ -341,15 +437,10 @@ public class MonsterTamer extends JavaPlugin {
 		for (LivingEntity entity : entityList) {
 			if (entity instanceof Creature) {
 				le = entity;
-				if ((name.equals("all") || PlayerListen.checkMonsters(le)
+				if ((name.equals("all") || EntityListen.checkMonsters(le)
 						.equals(name))
 						&& entity.getEntityId() != p.getEntityId()
-						&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
-								.getLocation().getX() >= loc.getX() - 10)
-								&& (entity.getLocation().getY() >= loc.getY() - 10 && entity
-										.getLocation().getY() <= loc.getY() + 10) && (entity
-								.getLocation().getZ() >= loc.getZ() - 10 && entity
-								.getLocation().getZ() <= loc.getZ() + 10))
+						&& checkRange(entity.getLocation(), loc, 10)
 						&& friends.containsKey(p.getName())
 						&& friends.get(p.getName()).contains(
 								"" + entity.getEntityId())) {
@@ -372,6 +463,15 @@ public class MonsterTamer extends JavaPlugin {
 		return;
 	}
 
+	public static boolean checkRange(Location loc, Location loc2, double range) {
+		range = range / 2;
+		return ((loc.getX() <= loc2.getX() + range && loc.getX() >= loc2.getX()
+				- range)
+				&& (loc.getY() >= loc2.getY() - range && loc.getY() <= loc2
+						.getY() + range) && (loc.getZ() >= loc2.getZ() - range && loc
+				.getZ() <= loc2.getZ() + range));
+	}
+
 	private void monsterTarget(String[] split, Player p) {
 		List<LivingEntity> entityList = p.getWorld().getLivingEntities();
 		Location loc = p.getLocation();
@@ -386,14 +486,9 @@ public class MonsterTamer extends JavaPlugin {
 		for (LivingEntity entity : entityList) {
 			if (entity instanceof Creature) {
 				le = entity;
-				if ((split[2].equals("all") || PlayerListen.checkMonsters(le)
+				if ((split[2].equals("all") || EntityListen.checkMonsters(le)
 						.equals(split[2]))
-						&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
-								.getLocation().getX() >= loc.getX() - 10)
-								&& (entity.getLocation().getY() >= loc.getY() - 10 && entity
-										.getLocation().getY() <= loc.getY() + 10) && (entity
-								.getLocation().getZ() >= loc.getZ() - 10 && entity
-								.getLocation().getZ() <= loc.getZ() + 10))
+						&& checkRange(entity.getLocation(), loc, 10)
 						&& friends.containsKey(p.getName())
 						&& friends.get(p.getName()).contains(
 								"" + entity.getEntityId())) {
@@ -401,7 +496,7 @@ public class MonsterTamer extends JavaPlugin {
 					for (LivingEntity e : entityList) {
 						if (e instanceof Creature
 								&& entity.getEntityId() != p.getEntityId()
-								&& (split[1].equals("all") || PlayerListen
+								&& (split[1].equals("all") || EntityListen
 										.checkMonsters(e).equals(split[1]))
 								&& ((e.getLocation().getX() <= loc.getX() + 20 && e
 										.getLocation().getX() >= loc.getX() - 20)
@@ -588,14 +683,9 @@ public class MonsterTamer extends JavaPlugin {
 		for (LivingEntity entity : p.getWorld().getLivingEntities()) {
 			if (entity instanceof Creature) {
 				le = (LivingEntity) entity;
-				if ((name.equals("all") || PlayerListen.checkMonsters(le)
+				if ((name.equals("all") || EntityListen.checkMonsters(le)
 						.equals(name))
-						&& ((entity.getLocation().getX() <= loc.getX() + 10 && entity
-								.getLocation().getX() >= loc.getX() - 10)
-								&& (entity.getLocation().getY() >= loc.getY() - 10 && entity
-										.getLocation().getY() <= loc.getY() + 10) && (entity
-								.getLocation().getZ() >= loc.getZ() - 10 && entity
-								.getLocation().getZ() <= loc.getZ() + 10))
+						&& checkRange(entity.getLocation(), loc, 10)
 						&& MonsterTamer.friends.containsKey(p.getName())
 						&& MonsterTamer.friends.get(p.getName()).contains(
 								"" + entity.getEntityId())) {
@@ -624,6 +714,8 @@ public class MonsterTamer extends JavaPlugin {
 		if (props.containsKey("consume-items"))
 			consumeItems = Boolean.parseBoolean(props
 					.getProperty("consume-items"));
+		if (props.containsKey("select-tool"))
+			selectTool = Integer.parseInt(props.getProperty("select-tool"));
 		if (props.containsKey("items")) {
 			String[] split = props.getProperty("items").split(";");
 			for (String i : split) {

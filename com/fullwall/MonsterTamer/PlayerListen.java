@@ -2,35 +2,31 @@ package com.fullwall.MonsterTamer;
 
 import java.util.ArrayList;
 
+import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import net.minecraft.server.AxisAlignedBB;
+
 import org.bukkit.ChatColor;
 import org.bukkit.Location;
-import org.bukkit.entity.Chicken;
-import org.bukkit.entity.Cow;
+import org.bukkit.craftbukkit.CraftServer;
+import org.bukkit.craftbukkit.CraftWorld;
+import org.bukkit.craftbukkit.entity.CraftEntity;
+import org.bukkit.craftbukkit.entity.CraftPlayer;
 import org.bukkit.entity.Creature;
 import org.bukkit.entity.CreatureType;
-import org.bukkit.entity.Creeper;
-import org.bukkit.entity.Ghast;
-import org.bukkit.entity.Giant;
+import org.bukkit.entity.Entity;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Pig;
-import org.bukkit.entity.PigZombie;
 import org.bukkit.entity.Player;
-import org.bukkit.entity.Sheep;
-import org.bukkit.entity.Skeleton;
-import org.bukkit.entity.Slime;
-import org.bukkit.entity.Spider;
-import org.bukkit.entity.Squid;
-import org.bukkit.entity.Zombie;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerListener;
 import org.bukkit.inventory.ItemStack;
 
 public class PlayerListen extends PlayerListener {
-	@SuppressWarnings("unused")
 	private static MonsterTamer plugin;
 	private long delay = 0;
 	public static Timer t = new Timer();
@@ -45,7 +41,7 @@ public class PlayerListen extends PlayerListener {
 		if (Permission.check(e.getPlayer())) {
 			Item id = e.getItemDrop();
 			if (checkMaps(id)) {
-				if (System.currentTimeMillis() <= (delay + 1300)) {
+				if (System.currentTimeMillis() <= (delay + 1000)) {
 					e.getPlayer()
 							.sendMessage(
 									ChatColor.RED
@@ -53,22 +49,145 @@ public class PlayerListen extends PlayerListener {
 					return;
 				}
 				delay = System.currentTimeMillis();
-				t.schedule(new RemindTask(e, id), 1250);
+				t.schedule(new RemindTask(e, id), 1000);
 			}
 		}
 	}
 
-	/*
-	 * public void onPlayerAnimation(PlayerAnimationEvent e) { if
-	 * (e.getAnimationType() == PlayerAnimationType.ARM_SWING) { Location loc =
-	 * e.getPlayer().getTargetBlock(null, 4).getLocation(); for (Entity entity :
-	 * e.getPlayer().getWorld().getEntities()) { if (entity instanceof Item) {
-	 * Location l = entity.getLocation(); if ((loc.getX() <= l.getX() + 4 &&
-	 * loc.getX() >= l.getX() - 4) && (loc.getY() >= l.getY() - 4 && loc.getY()
-	 * <= l .getY() + 4) && (loc.getZ() >= l.getZ() - 4 && loc.getZ() <= l
-	 * .getZ() + 4) && !getName((Item) entity, e.getPlayer()).isEmpty()) {
-	 * MonsterTamer.log.info("!!!!"); } } } } }
-	 */
+	@Override
+	public void onPlayerInteract(PlayerInteractEvent e) {
+		if (e.getPlayer().getItemInHand().getTypeId() == MonsterTamer.selectTool) {
+			if (e.getAction() == Action.RIGHT_CLICK_AIR) {
+				handleSearchEntity(e);
+			} else if (e.getAction() == Action.RIGHT_CLICK_BLOCK) {
+				handleSetBlockTarget(e);
+			}
+		}
+	}
+
+	private void handleSetBlockTarget(PlayerInteractEvent e) {
+		if (MonsterTamer.selectedMonsters.get(e.getPlayer().getName()) != null) {
+			for (Integer ID : MonsterTamer.selectedMonsters.get(e.getPlayer()
+					.getName())) {
+				MonsterTamer.locationMovers.put(ID, e.getPlayer()
+						.getTargetBlock(null, 50).getLocation());
+				MonsterTamer.addFollower(e.getPlayer(), ID, true);
+			}
+			e.getPlayer().sendMessage(
+					ChatColor.YELLOW
+							+ ""
+							+ MonsterTamer.selectedMonsters.get(
+									e.getPlayer().getName()).size()
+							+ ChatColor.GREEN
+							+ " monster(s) moving to that block.");
+		} else
+			e.getPlayer().sendMessage(ChatColor.RED + "No selected monsters!");
+	}
+
+	@SuppressWarnings({ "rawtypes" })
+	private void handleSearchEntity(PlayerInteractEvent event) {
+		List entities = getEntityList(event);
+		if (entities.size() == 1) {
+			Entity entity = CraftEntity.getEntity(
+					(CraftServer) plugin.getServer(),
+					(net.minecraft.server.Entity) entities.get(0));
+			if (!(entity instanceof LivingEntity))
+				return;
+			if (MonsterTamer.friends.containsKey(event.getPlayer().getName())
+					&& MonsterTamer.friends.get(event.getPlayer().getName())
+							.contains("" + entity.getEntityId())) {
+				if (!MonsterTamer.selectedMonsters.containsKey(event
+						.getPlayer().getName())
+						|| !MonsterTamer.selectedMonsters.get(
+								event.getPlayer().getName()).contains(
+								entity.getEntityId())) {
+					ArrayList<Integer> selected = new ArrayList<Integer>();
+					if (MonsterTamer.selectedMonsters.get(event.getPlayer()
+							.getName()) != null)
+						selected = MonsterTamer.selectedMonsters.get(event
+								.getPlayer().getName());
+					if (selected.indexOf(entity.getEntityId()) == -1) {
+						selected.add(entity.getEntityId());
+						MonsterTamer.selectedMonsters.put(event.getPlayer()
+								.getName(), selected);
+						event.getPlayer().sendMessage(
+								ChatColor.GREEN
+										+ "You selected your "
+										+ ChatColor.YELLOW
+										+ EntityListen.checkMonsters(
+												(LivingEntity) entity)
+												.toUpperCase()
+										+ ChatColor.GREEN + ".");
+						MonsterTamer.addFollower(event.getPlayer(),
+								(LivingEntity) entity, false);
+					}
+				} else {
+					ArrayList<Integer> selected = new ArrayList<Integer>();
+					if (MonsterTamer.selectedMonsters.get(event.getPlayer()
+							.getName()) != null)
+						selected = MonsterTamer.selectedMonsters.get(event
+								.getPlayer().getName());
+					if (selected.indexOf(entity.getEntityId()) != -1) {
+						selected.remove(selected.indexOf(entity.getEntityId()));
+						MonsterTamer.selectedMonsters.put(event.getPlayer()
+								.getName(), selected);
+						event.getPlayer().sendMessage(
+								ChatColor.GREEN
+										+ "You deselected your "
+										+ ChatColor.YELLOW
+										+ EntityListen.checkMonsters(
+												(LivingEntity) entity)
+												.toUpperCase()
+										+ ChatColor.GREEN + ".");
+						MonsterTamer.addFollower(event.getPlayer(),
+								(LivingEntity) entity, true);
+					}
+				}
+			} else if (MonsterTamer.selectedMonsters.containsKey(event
+					.getPlayer().getName())
+					&& !MonsterTamer.selectedMonsters.get(
+							event.getPlayer().getName()).contains(
+							entity.getEntityId())) {
+				int count = 0;
+				for (LivingEntity livingEntity : entity.getWorld()
+						.getLivingEntities()) {
+					if (MonsterTamer.selectedMonsters.get(
+							event.getPlayer().getName()).contains(
+							livingEntity.getEntityId())) {
+						((Creature) livingEntity)
+								.setTarget((LivingEntity) entity);
+						count += 1;
+					}
+				}
+				if (count != 0)
+					event.getPlayer().sendMessage(
+							ChatColor.GREEN + "Setting " + ChatColor.YELLOW
+									+ count + ChatColor.GREEN
+									+ " monster(s) on your target.");
+				else
+					event.getPlayer().sendMessage(
+							ChatColor.RED
+									+ "You don't have any monsters selected!");
+			}
+
+		}
+	}
+
+	@SuppressWarnings({ "rawtypes" })
+	private List getEntityList(PlayerInteractEvent e) {
+		Location loc = e.getPlayer().getTargetBlock(null, 4).getLocation();
+		Location loc2 = e.getPlayer().getLocation();
+		double x1 = loc.getBlockX() + 0.4D;
+		double y1 = loc.getBlockY() + 0.4D;
+		double z1 = loc.getBlockZ() + 0.4D;
+		double x2 = loc2.getBlockX();
+		double y2 = loc.getBlockY() + 0.6D;
+		double z2 = loc2.getBlockZ();
+		return ((CraftWorld) e.getPlayer().getWorld()).getHandle().b(
+				((CraftPlayer) e.getPlayer()).getHandle(),
+				AxisAlignedBB.a(Math.min(x1, x2), y1, Math.min(z1, z2),
+						Math.max(x1, x2), y2, Math.max(z1, z2)));
+	}
 
 	public static void spawnFromItemDrop(PlayerDropItemEvent e, Item id) {
 		if (MonsterTamer.playerMonsters.get(e.getPlayer().getName()) == null
@@ -151,38 +270,6 @@ public class PlayerListen extends PlayerListener {
 		MonsterTamer.writeUsers();
 	}
 
-	public static String checkMonsters(LivingEntity le) {
-		String name = "";
-		if (le instanceof Chicken) {
-			name = "chicken";
-		} else if (le instanceof Cow) {
-			name = "cow";
-		} else if (le instanceof Creeper) {
-			name = "creeper";
-		} else if (le instanceof Ghast) {
-			name = "ghast";
-		} else if (le instanceof Giant) {
-			name = "giant";
-		} else if (le instanceof Pig) {
-			name = "pig";
-		} else if (le instanceof PigZombie) {
-			name = "pigzombie";
-		} else if (le instanceof Sheep) {
-			name = "sheep";
-		} else if (le instanceof Skeleton) {
-			name = "skeleton";
-		} else if (le instanceof Slime) {
-			name = "slime";
-		} else if (le instanceof Spider) {
-			name = "spider";
-		} else if (le instanceof Squid) {
-			name = "squid";
-		} else if (le instanceof Zombie) {
-			name = "zombie";
-		}
-		return name;
-	}
-
 	public static String checkMonsters(String name) {
 		if (name.equals("chicken")) {
 			name = "chicken";
@@ -198,6 +285,8 @@ public class PlayerListen extends PlayerListener {
 			name = "pig";
 		} else if (name.equals("pigzombie")) {
 			name = "pigzombie";
+		} else if (name.equals("monster")) {
+			name = "monster";
 		} else if (name.equals("sheep")) {
 			name = "sheep";
 		} else if (name.equals("skeleton")) {
@@ -208,9 +297,12 @@ public class PlayerListen extends PlayerListener {
 			name = "spider";
 		} else if (name.equals("squid")) {
 			name = "squid";
+		} else if (name.equals("wolf")) {
+			name = "wolf";
 		} else if (name.equals("zombie")) {
 			name = "zombie";
-		}
+		} else
+			name = "";
 		return name;
 	}
 

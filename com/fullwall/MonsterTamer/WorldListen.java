@@ -15,6 +15,7 @@ import org.bukkit.event.world.ChunkUnloadEvent;
 import org.bukkit.event.world.WorldListener;
 
 public class WorldListen extends WorldListener {
+	@SuppressWarnings("unused")
 	private static MonsterTamer plugin;
 	private ConcurrentHashMap<Location, ArrayList<String>> toRespawn = new ConcurrentHashMap<Location, ArrayList<String>>();
 
@@ -23,7 +24,8 @@ public class WorldListen extends WorldListener {
 		this.plugin = plugin;
 	}
 
-	public void onChunkUnloaded(ChunkUnloadEvent e) {
+	@Override
+	public void onChunkUnload(ChunkUnloadEvent e) {
 		if (MonsterTamer.stopDespawning == true) {
 			for (Entity entity : e.getChunk().getEntities()) {
 				if (!(entity instanceof Player)
@@ -35,7 +37,7 @@ public class WorldListen extends WorldListener {
 					String playerName = "";
 					Location loc = living.getLocation();
 					ArrayList<String> toPut = new ArrayList<String>();
-					toPut.add(plugin.entityListener.checkMonsters(living));
+					toPut.add(EntityListen.checkMonsters(living));
 					for (Entry<String, ArrayList<String>> i : MonsterTamer.friends
 							.entrySet()) {
 						if (i.getValue().contains("" + living.getEntityId())) {
@@ -76,12 +78,15 @@ public class WorldListen extends WorldListener {
 		}
 	}
 
-	public void onChunkLoaded(ChunkLoadEvent e) {
+	@Override
+	public void onChunkLoad(ChunkLoadEvent e) {
 		if (MonsterTamer.stopDespawning == true && toRespawn.size() > 0) {
 			for (Entry<Location, ArrayList<String>> entry : toRespawn
 					.entrySet()) {
-				if (e.getChunk().getWorld().getChunkAt(entry.getKey())
-						.equals(e.getChunk())) {
+				if (e.getChunk().getX() == e.getWorld()
+						.getChunkAt(entry.getKey()).getX()
+						&& e.getChunk().getZ() == e.getWorld()
+								.getChunkAt(entry.getKey()).getZ()) {
 					Creature monster = (Creature) entry
 							.getKey()
 							.getWorld()

@@ -22,6 +22,7 @@ import org.bukkit.entity.Skeleton;
 import org.bukkit.entity.Slime;
 import org.bukkit.entity.Spider;
 import org.bukkit.entity.Squid;
+import org.bukkit.entity.Wolf;
 import org.bukkit.entity.Zombie;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
@@ -188,7 +189,7 @@ public class EntityListen extends EntityListener {
 		}
 	}
 
-	public String checkMonsters(LivingEntity le) {
+	public static String checkMonsters(LivingEntity le) {
 		String name = "";
 		if (le instanceof Chicken) {
 			name = "Chicken";
@@ -204,6 +205,8 @@ public class EntityListen extends EntityListener {
 			name = "Pig";
 		} else if (le instanceof PigZombie) {
 			name = "PigZombie";
+		} else if (le instanceof Monster) {
+			name = "Monster";
 		} else if (le instanceof Sheep) {
 			name = "Sheep";
 		} else if (le instanceof Skeleton) {
@@ -214,6 +217,8 @@ public class EntityListen extends EntityListener {
 			name = "Spider";
 		} else if (le instanceof Squid) {
 			name = "Squid";
+		} else if (le instanceof Wolf) {
+			name = "Wolf";
 		} else if (le instanceof Zombie) {
 			name = "Zombie";
 		}
