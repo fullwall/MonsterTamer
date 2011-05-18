@@ -22,7 +22,7 @@ public class Permission {
 		} else {
 			Logger log = Logger.getLogger("Minecraft");
 			log.log(Level.SEVERE,
-					"[MonsterTamer]: Nijikokuns' Permissions plugin isn't loaded. Commands are usable by all.");
+					"[MonsterTamer]: Permissions plugin isn't loaded. Features are usable by all (or by ops only if configured).");
 		}
 	}
 
@@ -30,7 +30,7 @@ public class Permission {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.check");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 	private static boolean permission(Player player, String string) {
@@ -41,56 +41,56 @@ public class Permission {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.catch");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 	public static boolean friendly(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.befriend");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 	public static boolean target(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.target");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 	public static boolean release(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.release");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 	public static boolean follow(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.follow");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 	public static boolean whistle(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.whistle");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 	public static boolean wait(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.wait");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 	public static boolean select(Player player) {
 		if (permissionsEnabled) {
 			return permission(player, "monstertamer.player.select");
 		}
-		return true;
+		return MonsterTamer.useOps ? player.isOp() : true;
 	}
 
 }

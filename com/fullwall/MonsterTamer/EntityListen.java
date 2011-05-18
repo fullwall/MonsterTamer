@@ -3,6 +3,7 @@ package com.fullwall.MonsterTamer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
+import java.util.Map.Entry;
 
 import org.bukkit.ChatColor;
 import org.bukkit.entity.Animals;
@@ -26,6 +27,7 @@ import org.bukkit.entity.Wolf;
 import org.bukkit.entity.Zombie;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityDamageEvent;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.event.entity.EntityListener;
 import org.bukkit.event.entity.EntityTargetEvent;
 import org.bukkit.event.entity.EntityDamageEvent.DamageCause;
@@ -44,8 +46,8 @@ public class EntityListen extends EntityListener {
 	public void onEntityDamage(EntityDamageEvent event) {
 		if (event.getCause() == DamageCause.FIRE_TICK
 				|| event.getCause() == DamageCause.FIRE) {
-			if (MonsterTamer.friendlies.contains(""
-					+ event.getEntity().getEntityId())) {
+			if (MonsterTamer.friendlies.contains(event.getEntity()
+					.getEntityId())) {
 				event.setCancelled(true);
 				event.getEntity().setFireTicks(0);
 				return;
@@ -58,43 +60,47 @@ public class EntityListen extends EntityListener {
 		if (e.getDamager() instanceof LivingEntity
 				&& e.getEntity() instanceof Player
 				&& MonsterTamer.friends.get(((Player) e.getEntity()).getName()) != null) {
-			ArrayList<String> array = MonsterTamer.friends.get(((Player) e
+			ArrayList<Integer> array = MonsterTamer.friends.get(((Player) e
 					.getEntity()).getName());
 			List<LivingEntity> livingEntities = e.getEntity().getWorld()
 					.getLivingEntities();
 			for (LivingEntity i : livingEntities) {
-				if (i instanceof Creature
-						&& array.contains("" + i.getEntityId())) {
+				if (i instanceof Creature && array.contains(i.getEntityId())) {
 					Creature c = (Creature) i;
 					c.setTarget((LivingEntity) e.getDamager());
 				}
 			}
 			return;
 		}
-		if (!(e.getDamager() instanceof Player))
+		if (!(e.getDamager() instanceof Player)
+				|| !(e.getEntity() instanceof LivingEntity)) {
 			return;
-		if (!(e.getEntity() instanceof LivingEntity)
-				&& (!(e.getEntity() instanceof Animals) || !(e.getEntity() instanceof Monster)))
-			return;
+		}
 		LivingEntity le = (LivingEntity) e.getEntity();
 		Player player = (Player) e.getDamager();
 
 		if ((MonsterTamer.catchItems.get(""
-				+ player.getItemInHand().getTypeId()) == null))
+				+ player.getItemInHand().getTypeId()) == null)) {
 			return;
-		if (MonsterTamer.monsterChances.get(checkMonsters(le)) == null)
+		}
+		if (MonsterTamer.monsterChances.get(checkMonsters(le)) == null) {
 			return;
-		if (!Permission.check(player))
+		}
+		if (!Permission.check(player)) {
 			return;
+		}
 		String name = checkMonsters(le);
 		String isCatching;
 		if (MonsterTamer.playerCatching.containsKey(player.getName()))
 			isCatching = MonsterTamer.playerCatching.get(player.getName());
 		else
 			isCatching = null;
-		if (isCatching != null)
-			if (MonsterTamer.playerCatching.get(player.getName()).equals(name))
+		if (isCatching != null) {
+			if (MonsterTamer.playerCatching.get(player.getName())
+					.equalsIgnoreCase(name)) {
 				return;
+			}
+		}
 		MonsterTamer.playerCatching.put(player.getName(), name);
 		double chance = MonsterTamer.monsterChances.get(checkMonsters(le));
 		if (chance < 3.0D)
@@ -106,8 +112,8 @@ public class EntityListen extends EntityListener {
 		// magic pokemon chance to catch.
 		chance = ((((3 * 20 - 2 * le.getHealth()) * chance * bonus) / (3 * 20) / 256) * 100);
 		// friendlies get a 100% catch rate.
-		ArrayList<String> temparray = MonsterTamer.friends
-				.get(player.getName());
+		ArrayList<Integer> temparray = MonsterTamer.friends.get(player
+				.getName());
 		if (temparray != null
 				&& temparray.contains(e.getEntity().getEntityId()))
 			chance = 9000;
@@ -149,14 +155,17 @@ public class EntityListen extends EntityListener {
 			}
 			// get rid of the monster
 			if (MonsterTamer.friends.containsKey(player.getName())) {
-				ArrayList<String> friendsArray = MonsterTamer.friends
+				ArrayList<Integer> friendsArray = MonsterTamer.friends
 						.get(player.getName());
-				if (friendsArray.contains("" + le.getEntityId()))
-					friendsArray.remove("" + le.getEntityId());
+				if (friendsArray.contains(le.getEntityId())) {
+					friendsArray.remove(friendsArray.indexOf(le.getEntityId()));
+					MonsterTamer.friends.put(player.getName(), friendsArray);
+				}
 			}
 			// stop other monsters overwriting the friendly ID
-			if (MonsterTamer.friendlies.contains("" + le.getEntityId()))
-				MonsterTamer.friendlies.remove("" + le.getEntityId());
+			if (MonsterTamer.friendlies.contains(le.getEntityId()))
+				MonsterTamer.friendlies.remove(MonsterTamer.friendlies
+						.indexOf(le.getEntityId()));
 			le.remove();
 
 			array.add(name);
@@ -172,18 +181,41 @@ public class EntityListen extends EntityListener {
 	@Override
 	public void onEntityTarget(EntityTargetEvent e) {
 		if ((e.getTarget() instanceof Player)) {
+			int EID = e.getEntity().getEntityId();
 			Player p = (Player) e.getTarget();
-			if (MonsterTamer.friendlies.contains(""
-					+ e.getEntity().getEntityId())) {
-				String name = MonsterTamer.targets.get(e.getEntity()
-						.getEntityId());
+			if (MonsterTamer.friendlies.contains(EID)) {
+				String name = MonsterTamer.targets.get(EID);
 				if (name == null || name.isEmpty()) {
 					e.setCancelled(true);
-					return;
 				}
-				if (!(name.equals(p.getName()))) {
+				if (name != null && !(name.equals(p.getName()))) {
 					e.setCancelled(true);
-					return;
+				}
+			}
+		}
+		if (e.getTarget() instanceof LivingEntity
+				&& e.getEntity() instanceof Monster) {
+			int EID = e.getEntity().getEntityId();
+			int TID = e.getTarget().getEntityId();
+			for (Entry<String, ArrayList<Integer>> i : MonsterTamer.friends
+					.entrySet()) {
+				if (i.getValue().contains(EID) && i.getValue().contains(TID)) {
+					e.setCancelled(true);
+				}
+			}
+		}
+	}
+
+	public void onEntityDeath(EntityDeathEvent event) {
+		if (event.getEntity() instanceof Monster
+				|| event.getEntity() instanceof Animals) {
+			ArrayList<Integer> ids = new ArrayList<Integer>();
+			int id = event.getEntity().getEntityId();
+			for (Entry<String, ArrayList<Integer>> i : MonsterTamer.selectedMonsters
+					.entrySet()) {
+				ids = i.getValue();
+				if (ids.contains(id)) {
+					ids.remove(ids.indexOf(id));
 				}
 			}
 		}
@@ -205,8 +237,6 @@ public class EntityListen extends EntityListener {
 			name = "Pig";
 		} else if (le instanceof PigZombie) {
 			name = "PigZombie";
-		} else if (le instanceof Monster) {
-			name = "Monster";
 		} else if (le instanceof Sheep) {
 			name = "Sheep";
 		} else if (le instanceof Skeleton) {

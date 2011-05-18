@@ -44,7 +44,7 @@ public class TickTask implements Runnable {
 							loc.getBlockZ());
 					PathPoint[] pp = { new PathPoint(block.getX(),
 							block.getY(), block.getZ()) };
-					((EntityCreature) (((CraftEntity) le).getHandle())).a = new PathEntity(
+					((EntityCreature) (((CraftEntity) le).getHandle())).pathEntity = new PathEntity(
 							pp);
 				}
 			}
@@ -62,7 +62,7 @@ public class TickTask implements Runnable {
 					Location loc = le.getLocation();
 					PathPoint[] pp = { new PathPoint(loc.getBlockX(),
 							loc.getBlockY(), loc.getBlockZ()) };
-					((EntityCreature) (((CraftEntity) le).getHandle())).a = new PathEntity(
+					((EntityCreature) (((CraftEntity) le).getHandle())).pathEntity = new PathEntity(
 							pp);
 				}
 			}
@@ -76,10 +76,10 @@ public class TickTask implements Runnable {
 					PathPoint[] pp = { new PathPoint(entry.getValue()
 							.getBlockX(), entry.getValue().getBlockY(), entry
 							.getValue().getBlockZ()) };
-					((EntityCreature) (((CraftEntity) le).getHandle())).a = new PathEntity(
+					((EntityCreature) (((CraftEntity) le).getHandle())).pathEntity = new PathEntity(
 							pp);
 					if (MonsterTamer.checkRange(le.getLocation(),
-							entry.getValue(), 0)) {
+							entry.getValue(), 2)) {
 						MonsterTamer.locationMovers.remove(entry.getKey());
 					}
 				}

@@ -95,7 +95,7 @@ public class PlayerListen extends PlayerListener {
 				return;
 			if (MonsterTamer.friends.containsKey(event.getPlayer().getName())
 					&& MonsterTamer.friends.get(event.getPlayer().getName())
-							.contains("" + entity.getEntityId())) {
+							.contains(entity.getEntityId())) {
 				if (!MonsterTamer.selectedMonsters.containsKey(event
 						.getPlayer().getName())
 						|| !MonsterTamer.selectedMonsters.get(
@@ -145,9 +145,8 @@ public class PlayerListen extends PlayerListener {
 				}
 			} else if (MonsterTamer.selectedMonsters.containsKey(event
 					.getPlayer().getName())
-					&& !MonsterTamer.selectedMonsters.get(
-							event.getPlayer().getName()).contains(
-							entity.getEntityId())) {
+					&& !(MonsterTamer.selectedMonsters.get(event.getPlayer()
+							.getName()).contains(entity.getEntityId()))) {
 				int count = 0;
 				for (LivingEntity livingEntity : entity.getWorld()
 						.getLivingEntities()) {
@@ -271,6 +270,7 @@ public class PlayerListen extends PlayerListener {
 	}
 
 	public static String checkMonsters(String name) {
+		name = name.toLowerCase();
 		if (name.equals("chicken")) {
 			name = "chicken";
 		} else if (name.equals("cow")) {
@@ -285,8 +285,6 @@ public class PlayerListen extends PlayerListener {
 			name = "pig";
 		} else if (name.equals("pigzombie")) {
 			name = "pigzombie";
-		} else if (name.equals("monster")) {
-			name = "monster";
 		} else if (name.equals("sheep")) {
 			name = "sheep";
 		} else if (name.equals("skeleton")) {
@@ -301,6 +299,8 @@ public class PlayerListen extends PlayerListener {
 			name = "wolf";
 		} else if (name.equals("zombie")) {
 			name = "zombie";
+		} else if (name.equals("all")) {
+			name = "all";
 		} else
 			name = "";
 		return name;
@@ -413,7 +413,6 @@ public class PlayerListen extends PlayerListener {
 						&& itemID.equalsIgnoreCase(item)) {
 					array.remove(index + 1);
 					array.remove(index);
-
 					MonsterTamer.playerMonsters.put(p.getName(), array);
 					return true;
 				}
@@ -432,12 +431,12 @@ public class PlayerListen extends PlayerListener {
 	}
 
 	public static void addFriends(Player p, Creature c) {
-		ArrayList<String> array = new ArrayList<String>();
+		ArrayList<Integer> array = new ArrayList<Integer>();
 		if (MonsterTamer.friends.containsKey(p.getName()))
 			array = MonsterTamer.friends.get(p.getName());
-		array.add("" + c.getEntityId());
+		array.add(c.getEntityId());
 		MonsterTamer.friends.put(p.getName(), array);
-		MonsterTamer.friendlies.add("" + c.getEntityId());
+		MonsterTamer.friendlies.add(c.getEntityId());
 		return;
 	}
 
