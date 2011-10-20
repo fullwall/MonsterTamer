@@ -1,4 +1,4 @@
-package com.fullwall.MonsterTamer;
+package com.fullwall.MonsterTamer.data.storage;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -37,10 +37,9 @@ import java.util.logging.Logger;
  * @author Nijiko
  */
 public final class PropertyHandler {
-
 	private static final Logger log = Logger.getLogger("Minecraft");
-	private Properties properties;
-	private String fileName;
+	private final Properties properties;
+	private final String fileName;
 	private boolean isNew = false;
 
 	public PropertyHandler(String fileName) {
